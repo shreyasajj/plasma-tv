@@ -602,88 +602,35 @@ QUrl TvhBackend::streamUrl(const QString &uuid) const
 void TvhBackend::requestStream(const QString &uuid)
 {
     const ServerConfig server = m_api->server();
-    if (isM3u(server)) {
-        QUrl url = streamUrl(uuid);
-        if (!url.isValid() || url.isEmpty()) {
-            Q_EMIT streamFailed(uuid, tr("The playlist has no stream address for this channel"));
-            return;
-        }
+    const QUrl direct = streamUrl(uuid);
 
-        // The player can't answer authentication challenges and would log credentials in the
-        // URL, so streams from the playlist's own server go through the local relay.
-        if (!server.username.isEmpty() && url.userName().isEmpty()
-            && url.host() == server.baseUrl().host()) {
-            url = m_streamProxy->relay(url, server);
-
-            if (url.isEmpty()) {
-                Q_EMIT streamFailed(uuid, tr("The local stream relay could not be started"));
-
-                return;
-            }
-        }
-
-        Q_EMIT streamReady(uuid, url);
-
+    if (!direct.isValid() || direct.isEmpty()) {
+        Q_EMIT streamFailed(uuid, tr("There is no stream address for this channel"));
         return;
     }
 
-    const QUrl direct = streamUrl(uuid);
-    const QUrlQuery profileQuery(direct);
-
-    if (server.username.isEmpty()) {
+    // HLS is fetched segment by segment by the player, which already buffers it.
+    if (StreamProxy::isHls(direct) && direct.userName().isEmpty()) {
         Q_EMIT streamReady(uuid, direct);
 
         return;
     }
 
-    // Prefer a short-lived ticket so the password never ends up in the media URL.
-    m_api->get(
+    // Every stream goes through the relay: it buffers, reconnects without the player noticing
+    // and keeps credentials out of the media URL. Like the guide, a stream on another host than
+    // the server never gets the server's credentials.
+    const bool ownHost = direct.host() == server.baseUrl().host();
+    const QUrl url = m_streamProxy->relay(direct,
+                                          ownHost ? server.username : QString(),
+                                          ownHost ? server.password : QString(),
+                                          AppSettings::instance()->playbackBuffer());
 
-        QStringLiteral("playlist/ticket/channel/") + uuid,
-        profileQuery,
-        [this, uuid, server, direct, profileQuery](const ApiResult &result) {
-            if (result.ok) {
-                const QStringList lines = QString::fromUtf8(result.body).split(QLatin1Char('\n'));
-                for (const QString &line : lines) {
-                    const QUrl ticketUrl(line.trimmed());
+    if (url.isEmpty()) {
+        Q_EMIT streamFailed(uuid, tr("The local stream relay could not be started"));
+        return;
+    }
 
-                    if (!ticketUrl.isValid()
-                        || !ticketUrl.scheme().startsWith(QLatin1String("http"))) {
-                        continue;
-                    }
-
-                    // Rebuild against our own base URL: the server may advertise an address we
-                    // can't reach.
-                    QUrl url = server.baseUrl();
-                    url.setPath(ticketUrl.path());
-                    QUrlQuery query(ticketUrl);
-
-                    if (!query.hasQueryItem(QStringLiteral("profile"))) {
-                        query.addQueryItem(QStringLiteral("profile"),
-                                           profileQuery.queryItemValue(QStringLiteral("profile")));
-                    }
-
-                    url.setQuery(query);
-                    Q_EMIT streamReady(uuid, url);
-
-                    return;
-                }
-            } else if (result.httpStatus == 401 || result.httpStatus == 403) {
-                Q_EMIT streamFailed(uuid, result.error);
-
-                return;
-            }
-
-            // Older servers without ticket support: relay the stream with our credentials.
-            const QUrl url = m_streamProxy->relay(direct, server);
-            if (url.isEmpty()) {
-                Q_EMIT streamFailed(uuid, tr("The local stream relay could not be started"));
-
-                return;
-            }
-
-            Q_EMIT streamReady(uuid, url);
-        });
+    Q_EMIT streamReady(uuid, url);
 }
 
 void TvhBackend::record(double eventId)

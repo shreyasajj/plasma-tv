@@ -143,6 +143,7 @@ qt_add_qml_module(flimmer
         src/tvhapi.h src/tvhapi.cpp
         src/m3u.h src/m3u.cpp
         src/xmltv.h src/xmltv.cpp
+        src/streambuffer.h src/streambuffer.cpp
         src/streamproxy.h src/streamproxy.cpp
         src/epgdatabase.h src/epgdatabase.cpp
         src/epgstore.h src/epgstore.cpp

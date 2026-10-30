@@ -63,3 +63,19 @@ flimmer_add_test(
         ${PROJECT_SOURCE_DIR}/src/epgstore.cpp
     LIBRARIES Qt6::Core Qt6::Sql
 )
+
+flimmer_add_test(
+    test_streambuffer
+    SOURCES ${PROJECT_SOURCE_DIR}/src/streambuffer.cpp
+    LIBRARIES Qt6::Core
+)
+
+flimmer_add_test(
+    test_streamproxy
+    SOURCES
+        ${PROJECT_SOURCE_DIR}/src/streamproxy.cpp
+        ${PROJECT_SOURCE_DIR}/src/streambuffer.cpp
+        ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
+        ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
+    LIBRARIES Qt6::Core Qt6::Network
+)
