@@ -7,8 +7,6 @@
 #ifndef APPSETTINGS_H
 #define APPSETTINGS_H
 
-#include "serverconfig.h"
-
 #include <QObject>
 #include <QVariantMap>
 #include <qqmlregistration.h>
@@ -16,25 +14,16 @@
 class QQmlEngine;
 class QJSEngine;
 
-// Persistent application settings. Non-secret values go to the regular
-// config file (~/.config/flimmer/flimmer.conf), the
-// password is stored in the system secret store (KWallet / Secret Service)
-// through QtKeychain and is never exposed to QML in plain text.
+// Persistent application settings in the config file
+// (~/.config/flimmer/flimmer.conf). The sources and their secrets are kept by
+// SourceSettings; configured, credentialsReady and secretStoreStatus are
+// passed on from there.
 class AppSettings : public QObject
 {
     Q_OBJECT
     QML_NAMED_ELEMENT(Settings)
     QML_SINGLETON
 
-    // "tvheadend" or "m3u"
-    Q_PROPERTY(QString backend READ backend NOTIFY changed)
-    Q_PROPERTY(QString host READ host NOTIFY changed)
-    Q_PROPERTY(int port READ port NOTIFY changed)
-    Q_PROPERTY(bool useHttps READ useHttps NOTIFY changed)
-    Q_PROPERTY(QString username READ username NOTIFY changed)
-    Q_PROPERTY(bool hasPassword READ hasPassword NOTIFY changed)
-    Q_PROPERTY(QString playlistUrl READ playlistUrl NOTIFY changed)
-    Q_PROPERTY(QString xmltvUrl READ xmltvUrl NOTIFY changed)
     Q_PROPERTY(QString streamProfile READ streamProfile NOTIFY changed)
     Q_PROPERTY(int guideDays READ guideDays NOTIFY changed)
     Q_PROPERTY(bool stopInBackground READ stopInBackground NOTIFY changed)
@@ -50,38 +39,6 @@ public:
     static AppSettings *instance();
     static AppSettings *create(QQmlEngine *, QJSEngine *);
 
-    QString backend() const
-    {
-        return ServerConfig::backendName(m_server.backend);
-    }
-    QString host() const
-    {
-        return m_server.host;
-    }
-    int port() const
-    {
-        return m_server.port;
-    }
-    bool useHttps() const
-    {
-        return m_server.https;
-    }
-    QString username() const
-    {
-        return m_server.username;
-    }
-    bool hasPassword() const
-    {
-        return !m_server.password.isEmpty();
-    }
-    QString playlistUrl() const
-    {
-        return m_server.playlistUrl;
-    }
-    QString xmltvUrl() const
-    {
-        return m_server.xmltvUrl;
-    }
     QString streamProfile() const
     {
         return m_streamProfile;
@@ -100,18 +57,9 @@ public:
     {
         return m_confirmQuit;
     }
-    bool configured() const
-    {
-        return m_server.isValid();
-    }
-    bool credentialsReady() const
-    {
-        return m_credentialsReady;
-    }
-    QString secretStoreStatus() const
-    {
-        return m_secretStoreStatus;
-    }
+    bool configured() const;
+    bool credentialsReady() const;
+    QString secretStoreStatus() const;
     QString lastChannel() const
     {
         return m_lastChannel;
@@ -131,14 +79,7 @@ public:
     Q_INVOKABLE void previewColorScheme(const QString &id);
     void setLastChannel(const QString &uuid);
 
-    ServerConfig server() const
-    {
-        return m_server;
-    }
-
-    // Expected keys: backend, host, port, useHttps, playlistUrl, xmltvUrl, username, streamProfile,
-    // guideDays, stopInBackground, confirmQuit, colorScheme and, only when the password was edited,
-    // password.
+    // Expected keys: streamProfile, guideDays, stopInBackground, confirmQuit and colorScheme.
     Q_INVOKABLE void save(const QVariantMap &values);
 
 Q_SIGNALS:
@@ -146,16 +87,10 @@ Q_SIGNALS:
     void credentialsReadyChanged();
     void secretStoreStatusChanged();
     void lastChannelChanged();
-    // Emitted after save(); serverChanged is true when connection parameters differ.
-    void saved(bool serverChanged);
+    void saved();
 
 private:
     explicit AppSettings(QObject *parent = nullptr);
-    void loadPassword();
-    void storePassword(const QString &password);
-    void setSecretStoreStatus(const QString &status);
-
-    ServerConfig m_server;
     QString m_streamProfile;
     int m_guideDays = 3;
     bool m_stopInBackground = true;
@@ -163,8 +98,6 @@ private:
     QString m_lastChannel;
     QString m_colorScheme;
     QVariantList m_colorSchemes;
-    bool m_credentialsReady = false;
-    QString m_secretStoreStatus;
 };
 
 #endif // APPSETTINGS_H

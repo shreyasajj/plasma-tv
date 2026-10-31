@@ -13,7 +13,12 @@
 
 namespace
 {
-constexpr int s_schemaVersion = 3;
+// Version 4 prefixed channel IDs with their source.
+constexpr int s_schemaVersion = 4;
+const QString s_identityKey = QStringLiteral("source/%1/identity");
+
+// Rows of one source: its channel IDs start with "<id>:".
+const QString s_ofSource = QStringLiteral("substr(%1, 1, ?) = ?");
 }
 
 EpgDatabase::EpgDatabase()
@@ -77,10 +82,8 @@ bool EpgDatabase::open()
         query.exec(QStringLiteral("PRAGMA synchronous=NORMAL"));
         query.exec(QStringLiteral("PRAGMA user_version"));
         const int version = query.next() ? query.value(0).toInt() : 0;
-        if (version == 1) {
-            // Version 2 added the stream URL of M3U channels.
-            query.exec(QStringLiteral("ALTER TABLE channels ADD COLUMN stream TEXT"));
-        } else if (version != s_schemaVersion && version != 2) {
+        if (version != 0 && version != s_schemaVersion) {
+            // Only a cache: anything older is fetched again.
             query.exec(QStringLiteral("DROP TABLE IF EXISTS channels"));
             query.exec(QStringLiteral("DROP TABLE IF EXISTS events"));
             query.exec(QStringLiteral("DROP TABLE IF EXISTS meta"));
@@ -110,7 +113,14 @@ bool EpgDatabase::open()
             }
         }
 
-        m_serverIdentity = meta(QStringLiteral("server"));
+        if (query.exec(
+                QStringLiteral("SELECT key, value FROM meta WHERE key LIKE 'source/%/identity'"))) {
+            while (query.next()) {
+                const QString key = query.value(0).toString();
+                m_identities.insert(key.section(QLatin1Char('/'), 1, 1), query.value(1).toString());
+            }
+        }
+
         ok = true;
     });
 
@@ -139,12 +149,12 @@ void EpgDatabase::setMeta(const QString &key, const QString &value) const
     query.exec();
 }
 
-void EpgDatabase::setServerIdentity(const QString &identity)
+void EpgDatabase::setSourceIdentity(const QString &sourceId, const QString &identity)
 {
-    m_serverIdentity = identity;
+    m_identities.insert(sourceId, identity);
 
-    run([this, identity]() {
-        setMeta(QStringLiteral("server"), identity);
+    run([this, sourceId, identity]() {
+        setMeta(s_identityKey.arg(sourceId), identity);
     });
 }
 
@@ -161,7 +171,7 @@ qint64 EpgDatabase::lastUpdate() const
 
 void EpgDatabase::clear()
 {
-    m_serverIdentity.clear();
+    m_identities.clear();
 
     run([this]() {
         QSqlDatabase database = QSqlDatabase::database(m_connectionName);
@@ -174,13 +184,43 @@ void EpgDatabase::clear()
     });
 }
 
-void EpgDatabase::saveChannels(const QVector<Channel> &channels)
+void EpgDatabase::clearSource(const QString &sourceId)
 {
-    run([this, channels]() {
+    m_identities.remove(sourceId);
+
+    run([this, sourceId]() {
+        const QString prefix = sourceId + QLatin1Char(':');
         QSqlDatabase database = QSqlDatabase::database(m_connectionName);
         database.transaction();
         QSqlQuery query(database);
-        query.exec(QStringLiteral("DELETE FROM channels"));
+
+        for (const auto &[table, column] : {std::pair{"channels", "uuid"}, {"events", "channel"}}) {
+            query.prepare(QStringLiteral("DELETE FROM %1 WHERE ").arg(QLatin1String(table))
+                          + s_ofSource.arg(QLatin1String(column)));
+            query.addBindValue(prefix.size());
+            query.addBindValue(prefix);
+            query.exec();
+        }
+
+        query.prepare(QStringLiteral("DELETE FROM meta WHERE key = ?"));
+        query.addBindValue(s_identityKey.arg(sourceId));
+        query.exec();
+        database.commit();
+    });
+}
+
+void EpgDatabase::saveChannels(const QString &sourceId, const QVector<Channel> &channels)
+{
+    run([this, sourceId, channels]() {
+        const QString prefix = sourceId + QLatin1Char(':');
+        QSqlDatabase database = QSqlDatabase::database(m_connectionName);
+        database.transaction();
+        QSqlQuery query(database);
+        query.prepare(QStringLiteral("DELETE FROM channels WHERE ")
+                      + s_ofSource.arg(QStringLiteral("uuid")));
+        query.addBindValue(prefix.size());
+        query.addBindValue(prefix);
+        query.exec();
         query.prepare(
             QStringLiteral("INSERT INTO channels (uuid, number, name, icon, position, stream) "
                            "VALUES (?, ?, ?, ?, ?, ?)"));
@@ -224,13 +264,20 @@ QVector<Channel> EpgDatabase::loadChannels() const
     return result;
 }
 
-void EpgDatabase::saveEvents(const QVector<EpgEvent> &events, qint64 updatedAt)
+void EpgDatabase::saveEvents(const QString &sourceId,
+                             const QVector<EpgEvent> &events,
+                             qint64 updatedAt)
 {
-    run([this, events, updatedAt]() {
+    run([this, sourceId, events, updatedAt]() {
+        const QString prefix = sourceId + QLatin1Char(':');
         QSqlDatabase database = QSqlDatabase::database(m_connectionName);
         database.transaction();
         QSqlQuery query(database);
-        query.exec(QStringLiteral("DELETE FROM events"));
+        query.prepare(QStringLiteral("DELETE FROM events WHERE ")
+                      + s_ofSource.arg(QStringLiteral("channel")));
+        query.addBindValue(prefix.size());
+        query.addBindValue(prefix);
+        query.exec();
         query.prepare(QStringLiteral(
             "INSERT OR REPLACE INTO events (id, channel, start, stop, title, subtitle, summary, "
             "description, genre, dvr_uuid, dvr_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));

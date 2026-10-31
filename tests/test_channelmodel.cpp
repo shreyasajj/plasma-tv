@@ -135,10 +135,15 @@ private Q_SLOTS:
                      2,
                      QStringLiteral("B"),
                      QStringLiteral("/var/lib/logo.png")),
-             channel(QStringLiteral("c"), 3, QStringLiteral("C"))});
+             channel(QStringLiteral("c"), 3, QStringLiteral("C")),
+             channel(QStringLiteral("d"),
+                     4,
+                     QStringLiteral("D"),
+                     QStringLiteral("http://logos/d.png"))});
 
-        // Without a server there is nothing to resolve against.
+        // Without a server there is nothing to resolve against, but absolute addresses work.
         QVERIFY(model.iconUrl(0).isEmpty());
+        QCOMPARE(model.iconUrl(3).toString(), QStringLiteral("http://logos/d.png"));
 
         QSignalSpy spy(&model, &ChannelModel::dataChanged);
         model.setBaseUrl(QUrl(QStringLiteral("http://tvh:9981/")));

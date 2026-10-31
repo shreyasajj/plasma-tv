@@ -473,7 +473,7 @@ FocusScope {
             focus: root.empty
             iconName: Tvh.status === Tvh.Connecting || Tvh.busy ? "" : Tvh.status === Tvh.Offline ? "network-disconnect" : "video-television"
             text: Tvh.status === Tvh.Unconfigured ? qsTr("Welcome!") : Tvh.status === Tvh.Offline ? qsTr("Can't reach the server") : Tvh.status === Tvh.Online && !Tvh.busy ? qsTr("No channels found") : qsTr("Loading channels…")
-            explanation: Tvh.status === Tvh.Unconfigured ? qsTr("Connect to your TVHeadend server in Settings.") : Tvh.status === Tvh.Offline ? Tvh.statusText : Tvh.status === Tvh.Online && !Tvh.busy ? qsTr("The server has no enabled channels for this user.") : ""
+            explanation: Tvh.status === Tvh.Unconfigured ? qsTr("Add a source of channels in Settings.") : Tvh.status === Tvh.Offline ? Tvh.statusText : Tvh.status === Tvh.Online && !Tvh.busy ? qsTr("The server has no enabled channels for this user.") : ""
             helpfulAction: Kirigami.Action {
                 text: qsTr("Open Settings")
                 icon.name: "configure"

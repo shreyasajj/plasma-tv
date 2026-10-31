@@ -10,7 +10,9 @@
 #include "serverconfig.h"
 
 #include <QHash>
+#include <QList>
 #include <QObject>
+#include <QPair>
 #include <QStringList>
 #include <QUrl>
 
@@ -28,15 +30,19 @@ class StreamProxy : public QObject
 public:
     explicit StreamProxy(QObject *parent = nullptr);
 
-    // Returns a local address for 'upstream' that is fetched with the credentials of 'server'.
-    // An empty URL means the relay could not be started.
-    QUrl relay(const QUrl &upstream, const ServerConfig &server);
+    using Headers = QList<QPair<QByteArray, QByteArray>>;
+
+    // Returns a local address for 'upstream' that is fetched with the credentials of 'server'
+    // and the extra 'headers' (e.g. a User-Agent). An empty URL means the relay could not be
+    // started.
+    QUrl relay(const QUrl &upstream, const ServerConfig &server, const Headers &headers = {});
 
 private:
     struct Target {
         QUrl url;
         QString username;
         QString password;
+        Headers headers;
     };
 
     bool listen();

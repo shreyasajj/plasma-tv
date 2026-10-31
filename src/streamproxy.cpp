@@ -62,7 +62,7 @@ bool StreamProxy::listen()
     return true;
 }
 
-QUrl StreamProxy::relay(const QUrl &upstream, const ServerConfig &server)
+QUrl StreamProxy::relay(const QUrl &upstream, const ServerConfig &server, const Headers &headers)
 {
     if (!listen()) {
         return {};
@@ -74,7 +74,7 @@ QUrl StreamProxy::relay(const QUrl &upstream, const ServerConfig &server)
     const QString token = QString::fromLatin1(
         QByteArray(reinterpret_cast<const char *>(random), sizeof(random)).toHex());
 
-    m_targets.insert(token, {upstream, server.username, server.password});
+    m_targets.insert(token, {upstream, server.username, server.password, headers});
     m_order.append(token);
     while (m_order.size() > s_maxTargets) {
         m_targets.remove(m_order.takeFirst());
@@ -132,6 +132,11 @@ void StreamProxy::serve(QTcpSocket *socket, const QByteArray &request)
     upstreamRequest.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("flimmer/0.1"));
     upstreamRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                                  QNetworkRequest::NoLessSafeRedirectPolicy);
+
+    // The source's own headers win, a User-Agent included.
+    for (const auto &[name, value] : target->headers) {
+        upstreamRequest.setRawHeader(name, value);
+    }
     QNetworkReply *reply = m_networkManager->get(upstreamRequest);
     NetworkAuth::setReplyCredentials(reply, target->username, target->password);
     reply->setReadBufferSize(s_bufferSize);
