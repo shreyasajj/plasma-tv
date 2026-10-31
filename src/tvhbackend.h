@@ -9,7 +9,7 @@
 
 #include "epgdatabase.h"
 #include "epgstore.h"
-#include "xmltv.h"
+#include "sources/source.h"
 
 #include <QDateTime>
 #include <QObject>
@@ -19,12 +19,11 @@
 
 class ChannelModel;
 class StreamProxy;
-class TvhApi;
 class QQmlEngine;
 class QJSEngine;
 
-// Central coordinator: talks to the server (TVHeadend, or an M3U playlist with
-// an XMLTV guide), maintains the EPG cache and exposes channels/events to QML.
+// Central coordinator: gets channels, the guide and streams from the source
+// (see Source), maintains the EPG cache and exposes channels/events to QML.
 class TvhBackend : public QObject
 {
     Q_OBJECT
@@ -37,7 +36,7 @@ class TvhBackend : public QObject
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QString serverName READ serverName NOTIFY serverInfoChanged)
     Q_PROPERTY(QString serverVersion READ serverVersion NOTIFY serverInfoChanged)
-    // Recordings need TVHeadend; M3U sources only play live.
+    // Recordings need a source that records (TVHeadend); the others only play live.
     Q_PROPERTY(bool canRecord READ canRecord NOTIFY serverInfoChanged)
     Q_PROPERTY(QDateTime lastUpdate READ lastUpdate NOTIFY epgChanged)
     Q_PROPERTY(int epgRevision READ epgRevision NOTIFY epgChanged)
@@ -111,8 +110,6 @@ public:
     Q_INVOKABLE QVariantMap eventById(double id) const;
 
     Q_INVOKABLE void requestStream(const QString &uuid);
-    // The server's address of a channel's stream, without credentials. Empty if unknown.
-    QUrl streamUrl(const QString &uuid) const;
     Q_INVOKABLE void record(double eventId);
     Q_INVOKABLE void cancelRecording(double eventId);
 
@@ -130,28 +127,24 @@ Q_SIGNALS:
 private:
     explicit TvhBackend(QObject *parent = nullptr);
 
+    void createSource();
     void applySettings(bool serverChanged);
     void loadCache();
-    void fetchChannels(int generation);
-    void fetchPlaylist(int generation);
-    void fetchGuide(int generation, const QUrl &url, const Xmltv::ChannelMap &map);
-    void fetchEpgPage(int generation, int offset);
-    void finishEpg(int generation);
+    void finishEpg(QVector<EpgEvent> events);
+    void playStream(const QString &uuid, const Source::StreamTarget &target);
     void setStatus(Status status, const QString &text);
     void setBusy(bool busy);
     void setRecordingState(qint64 eventId, const QString &dvrUuid, const QString &dvrState);
 
-    TvhApi *m_api;
+    Source *m_source = nullptr;
     ChannelModel *m_channels;
     StreamProxy *m_streamProxy;
     EpgStore m_store;
     EpgDatabase m_database;
-    QVector<EpgEvent> m_incoming;
 
     Status m_status = Unconfigured;
     QString m_statusText;
     bool m_busy = false;
-    int m_generation = 0;
     QString m_serverName;
     QString m_serverVersion;
     QDateTime m_lastUpdate;

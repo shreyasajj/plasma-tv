@@ -146,6 +146,10 @@ qt_add_qml_module(flimmer
         src/epgdatabase.h src/epgdatabase.cpp
         src/epgstore.h src/epgstore.cpp
         src/channelmodel.h src/channelmodel.cpp
+        src/sources/sourceconfig.h src/sources/sourceconfig.cpp
+        src/sources/source.h src/sources/source.cpp
+        src/sources/tvheadendsource.h src/sources/tvheadendsource.cpp
+        src/sources/m3usource.h src/sources/m3usource.cpp
         src/tvhbackend.h src/tvhbackend.cpp
         src/screensaverinhibitor.h src/screensaverinhibitor.cpp
         src/logoimageprovider.h src/logoimageprovider.cpp
