@@ -4,6 +4,7 @@
 
 #include "m3usource.h"
 #include "source.h"
+#include "stalkersource.h"
 #include "tvheadendsource.h"
 #include "xtreamsource.h"
 
@@ -20,6 +21,10 @@ Source *Source::create(const SourceConfig &config, QObject *parent)
 
     if (config.type == SourceConfig::Xtream) {
         return new XtreamSource(config, parent);
+    }
+
+    if (config.type == SourceConfig::Stalker) {
+        return new StalkerSource(config, parent);
     }
 
     return nullptr;

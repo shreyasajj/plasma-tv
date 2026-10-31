@@ -283,8 +283,8 @@ paths in order, remembering the first that answers the handshake:
 3. **Login:** when a username is set,
    `?type=stb&action=do_auth&login=<user>&password=<password>`. A false
    `js` means "Wrong username or password".
-4. **Genres:** `?type=itv&action=get_genres`. They are stored with the
-   channels, like Xtream categories.
+4. **Genres:** `?type=itv&action=get_genres` is not fetched yet, like Xtream categories:
+   nothing shows them.
 5. **Channels:** `?type=itv&action=get_all_channels` returns `js.data[]`
    with `id`, `name`, `number`, `cmd`, `logo` and `xmltv_id`.
 6. **Guide:** `?type=itv&action=get_epg_info&period=<guide days × 24>`

@@ -1,0 +1,4 @@
+{"js":{"total_items":3,"max_page_items":3,"selected_item":0,"cur_page":0,"data":[
+ {"id":"1","name":"BBC One HD","number":"1","cmd":"ffmpeg http://localhost/ch/1_","logo":"misc/logos/320/1.png","xmltv_id":"bbc1.uk","tv_genre_id":"3"},
+ {"id":"2","name":"Das Erste","number":"2","cmd":"ffmpeg http://localhost/ch/2_","logo":"http://logos.example/daserste.png","xmltv_id":"","tv_genre_id":"4"},
+ {"id":"3","name":"No stream","number":"3","cmd":"","logo":""}]},"text":"generated in: 0.05s"}

@@ -1,0 +1,4 @@
+{"js":{"data":{
+ "1":[{"id":"9001","ch_id":"1","name":"News","descr":"The headlines","start_timestamp":1893492000,"stop_timestamp":1893495600,"category":"News"},
+      {"id":"9002","ch_id":"1","name":"Broken","start_timestamp":1893495600,"stop_timestamp":1893495600}],
+ "2":[{"id":"9101","ch_id":"2","name":"Tagesschau","descr":"","start_timestamp":"1893492000","stop_timestamp":"1893499200","category":"Movie / Drama"}]}},"text":"generated in: 0.10s"}
