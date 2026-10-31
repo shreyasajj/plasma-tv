@@ -56,7 +56,7 @@ SourceSettings::SourceSettings(QSettings *settings, SecretStore *store, QObject 
 
 QStringList SourceSettings::types()
 {
-    return {SourceConfig::Tvheadend, SourceConfig::M3u};
+    return {SourceConfig::Tvheadend, SourceConfig::M3u, SourceConfig::Xtream};
 }
 
 QString SourceSettings::typeName(const QString &type)

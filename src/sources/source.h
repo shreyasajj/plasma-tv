@@ -8,6 +8,7 @@
 #define SOURCE_H
 
 #include "epgstore.h"
+#include "headers.h"
 #include "sourceconfig.h"
 
 #include <QList>
@@ -28,7 +29,7 @@ public:
         bool record = false;
     };
 
-    using Headers = QList<QPair<QByteArray, QByteArray>>;
+    using Headers = ::Headers;
 
     // Where to fetch a stream from. TvhBackend relays it when it needs credentials or
     // headers, so the media player never sees them.
@@ -37,10 +38,13 @@ public:
         QString username;
         QString password;
         Headers headers;
+        // The URL itself holds a secret (Xtream puts the password in the path).
+        bool secretUrl = false;
 
         bool needsRelay() const
         {
-            return !username.isEmpty() || !headers.isEmpty() || !url.userInfo().isEmpty();
+            return secretUrl || !username.isEmpty() || !headers.isEmpty()
+                || !url.userInfo().isEmpty();
         }
     };
 
@@ -75,6 +79,8 @@ public:
     // Only called with capabilities().record.
     virtual void record(const EpgEvent &event);
     virtual void cancelRecording(const EpgEvent &event);
+    // Playing a channel failed for good; a source that can tell why emits streamFailed().
+    virtual void explainStreamError(const QString &channelId);
 
 Q_SIGNALS:
     void serverInfo(const QString &name, const QString &version);

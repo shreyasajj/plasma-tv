@@ -100,6 +100,23 @@ FocusScope {
                 kind: "text",
                 label: qsTr("Guide (XMLTV)"),
                 placeholder: qsTr("from the playlist")
+            }, {
+                key: "userAgent",
+                kind: "text",
+                label: qsTr("User-Agent"),
+                placeholder: qsTr("Flimmer's own")
+            }, {
+                key: "headers",
+                kind: "text",
+                label: qsTr("Extra headers"),
+                placeholder: qsTr("Name: value, separated by |")
+            });
+        } else if (type === "xtream") {
+            list.push({
+                key: "server",
+                kind: "text",
+                label: qsTr("Server address"),
+                placeholder: qsTr("e.g. http://provider.example:8080")
             });
         }
 
@@ -107,7 +124,7 @@ FocusScope {
             key: "username",
             kind: "text",
             label: qsTr("Username"),
-            placeholder: qsTr("none (anonymous)")
+            placeholder: type === "xtream" ? qsTr("required") : qsTr("none (anonymous)")
         }, {
             key: "password",
             kind: "secret",

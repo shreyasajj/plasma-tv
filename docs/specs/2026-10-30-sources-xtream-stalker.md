@@ -207,8 +207,8 @@ settings. The app looks and behaves the same.
 | Step | Request | Used for |
 | --- | --- | --- |
 | Log in | `player_api.php?username=U&password=P` | `user_info.auth`, `status`, `exp_date`, `max_connections`, `active_cons`; `server_info` for the name and time zone |
-| Categories | `…&action=get_live_categories` | Stored with each channel for later filtering. Not shown yet. |
-| Channels | `…&action=get_live_streams` | `stream_id`, `name`, `num`, `stream_icon`, `epg_channel_id`, `category_id` |
+| Categories | `…&action=get_live_categories` | Not fetched yet: nothing shows categories, and keeping them would need a new cache column |
+| Channels | `…&action=get_live_streams` | `stream_id`, `name`, `num`, `stream_icon`, `epg_channel_id` |
 | Guide | `xmltv.php?username=U&password=P` | The existing `Xmltv` parser, mapped through `epg_channel_id` |
 | Stream | `<server>/live/U/P/<stream_id>.ts` | Playback. `.m3u8` is used only when `allowed_output_formats` lacks `ts`. |
 

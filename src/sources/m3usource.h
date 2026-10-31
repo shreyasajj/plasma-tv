@@ -37,6 +37,8 @@ private:
     int m_generation = 0;
     int m_guideDays = 3;
     QHash<QString, QString> m_streams; // channel ID → stream address
+    // User-Agent and extra headers some providers want, on every request and the stream.
+    Headers m_headers;
 };
 
 #endif // M3USOURCE_H

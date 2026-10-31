@@ -585,6 +585,13 @@ void TvhBackend::requestStream(const QString &uuid)
     state->source->requestStream(ChannelId::ownOf(uuid));
 }
 
+void TvhBackend::explainStreamError(const QString &uuid)
+{
+    if (const SourceState *state = stateOfChannel(uuid)) {
+        state->source->explainStreamError(ChannelId::ownOf(uuid));
+    }
+}
+
 void TvhBackend::playStream(const QString &uuid, const Source::StreamTarget &target)
 {
     if (!target.needsRelay()) {

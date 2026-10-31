@@ -95,6 +95,8 @@ Item {
             reconnect.restart();
         } else {
             error = message;
+            // E.g. an Xtream account used on another device; replaces the message if so.
+            Tvh.explainStreamError(channelUuid);
         }
     }
 
