@@ -123,17 +123,60 @@ FocusScope {
                 label: qsTr("User-Agent"),
                 placeholder: qsTr("Flimmer's own")
             });
+        } else if (type === "stalker") {
+            // Only the portal and the MAC address are required; portals differ in the rest.
+            const models = ["MAG250", "MAG254", "MAG256", "MAG322", "MAG324", "MAG420", "MAG424"];
+            list.push({
+                key: "portal",
+                kind: "text",
+                label: qsTr("Portal address"),
+                placeholder: qsTr("e.g. http://portal.example/c/")
+            }, {
+                key: "mac",
+                kind: "secret",
+                label: qsTr("MAC address"),
+                placeholder: "00:1A:79:12:34:56",
+                plain: true
+            }, {
+                key: "stbModel",
+                kind: "choice",
+                label: qsTr("Box model"),
+                options: models,
+                names: models,
+                fallback: "MAG250",
+                editable: true
+            }, {
+                key: "serial",
+                kind: "secret",
+                label: qsTr("Serial number (optional)"),
+                plain: true
+            }, {
+                key: "deviceId",
+                kind: "secret",
+                label: qsTr("Device ID 1 (optional)"),
+                plain: true
+            }, {
+                key: "deviceId2",
+                kind: "secret",
+                label: qsTr("Device ID 2 (optional)"),
+                plain: true
+            }, {
+                key: "signature",
+                kind: "secret",
+                label: qsTr("Signature (optional)"),
+                plain: true
+            });
         }
 
         list.push({
             key: "username",
             kind: "text",
-            label: qsTr("Username"),
+            label: type === "stalker" ? qsTr("Username (optional)") : qsTr("Username"),
             placeholder: type === "xtream" ? qsTr("required") : qsTr("none (anonymous)")
         }, {
             key: "password",
             kind: "secret",
-            label: qsTr("Password")
+            label: type === "stalker" ? qsTr("Password (optional)") : qsTr("Password")
         });
 
         return list;
@@ -159,13 +202,17 @@ FocusScope {
 
         switch (field.kind) {
         case "secret":
+            // Typed here: identifiers like the MAC address are shown, passwords never.
             if (draft[field.key] !== undefined)
-                return draft[field.key].length > 0 ? "•".repeat(Math.min(draft[field.key].length, 16)) : qsTr("not set");
-            return stored[field.key + "Set"] ? "••••••••" : qsTr("not set");
+                return draft[field.key].length === 0 ? qsTr("not set") : field.plain ? draft[field.key] : "•".repeat(Math.min(draft[field.key].length, 16));
+            return stored[field.key + "Set"] ? (field.plain ? qsTr("stored") : "••••••••") : (field.placeholder ? qsTr("not set, e.g. %1").arg(field.placeholder) : qsTr("not set"));
         case "switch":
             return v ? qsTr("On") : qsTr("Off");
         case "choice":
-            return field.names[Math.max(0, field.options.indexOf(v))];
+            {
+                const i = field.options.indexOf(v);
+                return i >= 0 ? field.names[i] : String(v);
+            }
         default:
             return v !== undefined && String(v).length > 0 ? String(v) : (field.placeholder ?? "");
         }
@@ -178,13 +225,18 @@ FocusScope {
             break;
         case "choice":
             {
-                const i = Math.max(0, field.options.indexOf(value(field.key, field.options[0])));
+                // Editable choices take free text on OK; the arrows go through the list.
+                if (field.editable && step === undefined) {
+                    editText(field.label, String(value(field.key, field.fallback)), "text", v => setValue(field.key, v.trim()));
+                    break;
+                }
+                const i = Math.max(0, field.options.indexOf(value(field.key, field.fallback ?? field.options[0])));
                 const n = field.options.length;
                 setValue(field.key, field.options[(i + (step ?? 1) + n) % n]);
                 break;
             }
         case "secret":
-            editText(field.label, "", "password", v => setValue(field.key, v));
+            editText(field.label, "", field.plain ? "text" : "password", v => setValue(field.key, field.plain ? v.trim() : v));
             break;
         case "number":
             editText(field.label, String(value(field.key, field.fallback)), "number", v => {

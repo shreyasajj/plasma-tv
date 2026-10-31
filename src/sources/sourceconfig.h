@@ -14,13 +14,14 @@
 #include <QVariantMap>
 
 // Settings of one source of channels, stored in the config file. 'secrets'
-// (passwords, …) are kept apart from the
+// (passwords, the MAC address of a Stalker portal, …) are kept apart from the
 // 'fields', so they are never handed to QML.
 struct SourceConfig {
     // Values of 'type'.
     static constexpr QLatin1StringView Tvheadend{"tvheadend"};
     static constexpr QLatin1StringView M3u{"m3u"};
     static constexpr QLatin1StringView Xtream{"xtream"};
+    static constexpr QLatin1StringView Stalker{"stalker"};
 
     QString id; // "src-3f2a"; prefixes the IDs of the source's channels
     QString type;

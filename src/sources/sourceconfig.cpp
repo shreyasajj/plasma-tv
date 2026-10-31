@@ -15,8 +15,17 @@ QString SourceConfig::newId()
                                         QLatin1Char('0'));
 }
 
-QStringList SourceConfig::secretKeys(const QString & /*type*/)
+QStringList SourceConfig::secretKeys(const QString &type)
 {
+    if (type == Stalker) {
+        return {QStringLiteral("mac"),
+                QStringLiteral("serial"),
+                QStringLiteral("deviceId"),
+                QStringLiteral("deviceId2"),
+                QStringLiteral("signature"),
+                QStringLiteral("password")};
+    }
+
     return {QStringLiteral("password")};
 }
 
@@ -30,6 +39,11 @@ bool SourceConfig::isValid() const
         return QUrl::fromUserInput(field(QStringLiteral("server"))).isValid()
             && !field(QStringLiteral("server")).trimmed().isEmpty()
             && !field(QStringLiteral("username")).isEmpty();
+    }
+
+    if (type == Stalker) {
+        return !field(QStringLiteral("portal")).trimmed().isEmpty()
+            && !secret(QStringLiteral("mac")).isEmpty();
     }
 
     return false;

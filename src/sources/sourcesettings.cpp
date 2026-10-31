@@ -73,7 +73,10 @@ SourceSettings::SourceSettings(QSettings *settings, SecretStore *store, QObject 
 
 QStringList SourceSettings::types()
 {
-    return {SourceConfig::Tvheadend, SourceConfig::M3u, SourceConfig::Xtream};
+    return {SourceConfig::Tvheadend,
+            SourceConfig::M3u,
+            SourceConfig::Xtream,
+            SourceConfig::Stalker};
 }
 
 QString SourceSettings::typeName(const QString &type)
@@ -88,6 +91,10 @@ QString SourceSettings::typeName(const QString &type)
 
     if (type == SourceConfig::Xtream) {
         return tr("Xtream Codes");
+    }
+
+    if (type == SourceConfig::Stalker) {
+        return tr("Stalker portal");
     }
 
     return type;

@@ -67,6 +67,30 @@ private Q_SLOTS:
         QVERIFY(!config.secrets.contains(QStringLiteral("password")));
     }
 
+    void appliesStalkerValues()
+    {
+        SourceConfig config;
+        config.type = SourceConfig::Stalker;
+        config.apply({{QStringLiteral("name"), QStringLiteral(" Portal ")},
+                      {QStringLiteral("portal"), QStringLiteral(" http://portal.local/c/ ")},
+                      {QStringLiteral("mac"), QStringLiteral("00:1A:79:00:00:01")},
+                      {QStringLiteral("stbModel"), QStringLiteral("MAG254")},
+                      {QStringLiteral("enabled"), false}});
+
+        QCOMPARE(config.name, QStringLiteral("Portal"));
+        QCOMPARE(config.field(QStringLiteral("portal")), QStringLiteral("http://portal.local/c/"));
+        // The MAC address is a secret, never a plain field.
+        QCOMPARE(config.secret(QStringLiteral("mac")), QStringLiteral("00:1A:79:00:00:01"));
+        QVERIFY(!config.fields.contains(QStringLiteral("mac")));
+        QVERIFY(!config.enabled);
+        QVERIFY(config.isValid());
+
+        // An emptied secret is removed.
+        config.apply({{QStringLiteral("mac"), QString()}});
+        QVERIFY(!config.secrets.contains(QStringLiteral("mac")));
+        QVERIFY(!config.isValid());
+    }
+
     void noPasswordWithoutUser()
     {
         SourceConfig config;

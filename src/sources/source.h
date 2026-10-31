@@ -17,8 +17,8 @@
 #include <QUrl>
 #include <QVector>
 
-// One source of channels and guide data: a TVHeadend server, an M3U playlist
-// or an Xtream Codes account. Channel and event IDs a source
+// One source of channels and guide data: a TVHeadend server, an M3U playlist,
+// an Xtream Codes account or a Stalker portal. Channel and event IDs a source
 // reports are its own; TvhBackend keeps the sources apart.
 class Source : public QObject
 {
