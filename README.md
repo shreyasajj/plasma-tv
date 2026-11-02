@@ -34,6 +34,29 @@ guide data and color scheme, next to the connection status.
 
 ![Settings page](img/settings.png)
 
+## Install
+
+Download a package from the
+[latest release](https://github.com/jclsn/flimmer/releases/latest).
+
+**Flatpak** (KDE Linux, or any distribution with Flatpak): pick the bundle for
+your machine (`x86_64` for PCs, `aarch64` for ARM boards like the Raspberry
+Pi), open it in Discover or run
+
+```sh
+flatpak install --user flimmer-<version>-x86_64.flatpak
+```
+
+Flimmer then shows up as "Live TV" on the Plasma Bigscreen home screen. The
+bundle doesn't update itself; install the one from a newer release to update.
+
+**Arch Linux** (x86_64): download both `.pkg.tar.zst` files and install them
+together:
+
+```sh
+sudo pacman -U bigscreen-ui-*.pkg.tar.zst flimmer-*.pkg.tar.zst
+```
+
 ## Build
 
 Supported on **Ubuntu** (26.10 and later) and **Arch Linux**, on both x86_64

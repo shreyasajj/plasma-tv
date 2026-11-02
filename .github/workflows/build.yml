@@ -7,6 +7,8 @@ name: Build
 on:
   push:
     branches: [main]
+    # Pushing a tag like v0.1.0 publishes a release with the packages below
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
   schedule:
@@ -176,9 +178,104 @@ jobs:
           pacman -U --noconfirm packaging/arch/bigscreen-ui/*.pkg.tar.zst
           su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --noconfirm"
 
-      - name: Upload package
+      - name: Upload packages
         uses: actions/upload-artifact@v7
         with:
           name: flimmer-arch-x86_64
-          path: packaging/arch/*.pkg.tar.zst
+          # Flimmer can't be installed without the Bigscreen UI package
+          path: |
+            packaging/arch/*.pkg.tar.zst
+            packaging/arch/bigscreen-ui/*.pkg.tar.zst
+            !packaging/arch/**/*-debug-*.pkg.tar.zst
+
+  flatpak:
+    name: Flatpak (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.11
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Build bundle
+        uses: flathub-infra/flatpak-github-actions/flatpak-builder@933e9e8ca36e85046ebca8e211f0785c6becac40
+        with:
+          manifest-path: packaging/flatpak/io.github.jclsn.Flimmer.yml
+          bundle: flimmer-${{ matrix.arch }}.flatpak
+          arch: ${{ matrix.arch }}
+          upload-artifact: false
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: flimmer-flatpak-${{ matrix.arch }}
+          path: flimmer-${{ matrix.arch }}.flatpak
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [reuse, ubuntu, arch, flatpak]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches the project version
+        id: version
+        run: |
+          version=$(sed -n 's/^project(flimmer VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match version $version in CMakeLists.txt"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd artifacts
+          # The Bigscreen UI package is in a subdirectory of the Arch artifact
+          mv bigscreen-ui/*.pkg.tar.zst .
+          for arch in x86_64 aarch64; do
+            mv "flimmer-$arch.flatpak" "flimmer-$VERSION-$arch.flatpak"
+          done
+          cat > notes.md <<EOF
+          ## Install
+
+          **Flatpak (KDE Linux, any distribution):** download the \`.flatpak\` for your machine
+          (\`x86_64\` for PCs, \`aarch64\` for Raspberry Pi and other ARM boards), then open it in
+          Discover or run:
+
+              flatpak install --user flimmer-$VERSION-x86_64.flatpak
+
+          Flimmer then shows up as "Live TV" on the Plasma Bigscreen home screen. To update, install the
+          bundle from a newer release.
+
+          **Arch Linux (x86_64):** download both \`.pkg.tar.zst\` files and install them together:
+
+              sudo pacman -U bigscreen-ui-*.pkg.tar.zst flimmer-*.pkg.tar.zst
+          EOF
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Flimmer $VERSION" \
+            --notes-file notes.md \
+            ./*.flatpak ./*.pkg.tar.zst
 

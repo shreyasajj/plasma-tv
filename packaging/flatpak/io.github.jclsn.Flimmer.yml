@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 shreyasajj
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+# Builds a Flatpak bundle that installs Flimmer with a launcher, so it shows
+# up on the Plasma Bigscreen home screen. Build from the repository root with
+# the bigscreen-ui submodule checked out:
+#
+#   flatpak-builder --user --install --force-clean build-flatpak \
+#     packaging/flatpak/io.github.jclsn.Flimmer.yml
+
+id: io.github.jclsn.Flimmer
+# Bigscreen UI needs Qt 6.11
+runtime: org.kde.Platform
+runtime-version: "6.11"
+sdk: org.kde.Sdk
+command: flimmer
+# Flatpak only exports launchers and icons named after the app ID
+rename-desktop-file: flimmer.desktop
+rename-icon: flimmer
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # Keep the screen on during playback (screensaverinhibitor.cpp)
+  - --talk-name=org.freedesktop.ScreenSaver
+  # Server password storage through QtKeychain
+  - --talk-name=org.kde.kwalletd6
+  - --talk-name=org.kde.kwalletd5
+  # "Plasma system colors" and user-installed color schemes
+  - --filesystem=xdg-config/kdeglobals:ro
+  - --filesystem=xdg-data/color-schemes:ro
+  # Recordings go to ~/Videos/TV recordings (streamrecorder.cpp)
+  - --filesystem=xdg-videos
+
+modules:
+  # Not part of the KDE runtime
+  - name: qtkeychain
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_WITH_QT6=ON
+      - -DBUILD_TRANSLATIONS=OFF
+      - -DBUILD_TEST_APPLICATION=OFF
+      # Talk to KWallet over D-Bus; libsecret isn't in the KDE runtime
+      - -DLIBSECRET_SUPPORT=OFF
+    cleanup:
+      - /include
+      - /lib/cmake
+      - /mkspecs
+    sources:
+      - type: git
+        url: https://github.com/frankosterfeld/qtkeychain.git
+        tag: v0.14.0
+        commit: e63da2868465db18eb35a312b2635c26fdc46923
+
+  - name: flimmer
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      # Bigscreen UI isn't in the KDE runtime, build it from the submodule
+      - -DUSE_SYSTEM_BIGSCREEN_UI=OFF
+      - -DBUILD_TESTING=OFF
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .flatpak-builder
+          - build
+          - build-flatpak
+          - flatpak_app
+          - repo
+          - stage
