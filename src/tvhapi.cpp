@@ -14,13 +14,17 @@ namespace
 {
 constexpr int s_timeoutMs = 20000;
 
-QNetworkRequest makeRequest(const QUrl &url)
+QNetworkRequest makeRequest(const QUrl &url, const Headers &headers)
 {
     QNetworkRequest request(url);
     request.setTransferTimeout(s_timeoutMs);
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("flimmer/0.1"));
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
+
+    for (const auto &[name, value] : headers) {
+        request.setRawHeader(name, value);
+    }
 
     return request;
 }
@@ -92,14 +96,14 @@ void TvhApi::get(const QString &path, const QUrlQuery &query, Callback callback)
 
 void TvhApi::get(const QUrl &url, Callback callback)
 {
-    QNetworkReply *reply = m_networkManager->get(makeRequest(url));
+    QNetworkReply *reply = m_networkManager->get(makeRequest(url, m_headers));
     setCredentials(reply, m_server);
     track(reply, std::move(callback));
 }
 
 void TvhApi::post(const QString &path, const QUrlQuery &form, Callback callback)
 {
-    QNetworkRequest request = makeRequest(m_server.url(path));
+    QNetworkRequest request = makeRequest(m_server.url(path), m_headers);
     request.setHeader(QNetworkRequest::ContentTypeHeader,
                       QStringLiteral("application/x-www-form-urlencoded"));
 
@@ -120,7 +124,7 @@ void TvhApi::probe(const ServerConfig &config, const QUrl &url, Callback callbac
     // A fresh manager so cached credentials/connections of the active server don't interfere.
     auto *networkManager = new QNetworkAccessManager(this);
     NetworkAuth::install(networkManager);
-    QNetworkReply *reply = networkManager->get(makeRequest(url));
+    QNetworkReply *reply = networkManager->get(makeRequest(url, m_headers));
     setCredentials(reply, config);
 
     connect(reply,

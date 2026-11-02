@@ -39,8 +39,9 @@ public:
     }
     [[nodiscard]] QUrl url() const;
 
-    Q_INVOKABLE void start(const QString &channelUuid, const QString &channelName);
-
+    // 'url' is what the player plays: a direct stream or the local relay, which keeps
+    // credentials out of it.
+    Q_INVOKABLE void start(const QUrl &url, const QString &channelName);
     // Stops recording and deletes the file.
     Q_INVOKABLE void stop();
 

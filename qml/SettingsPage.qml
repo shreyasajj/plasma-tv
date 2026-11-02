@@ -15,15 +15,6 @@ FocusScope {
     signal editText(string title, string value, string mode, var callback)
 
     // Draft values, committed with "Save"
-    property string dBackend: "tvheadend"
-    readonly property bool m3u: dBackend === "m3u"
-    property string dHost
-    property int dPort: 9981
-    property bool dHttps
-    property string dPlaylist
-    property string dXmltv
-    property string dUser
-    property var dPassword: null   // null = unchanged
     property string dProfile
     property int dDays: 3
     // -1 = Auto, 0 = Off, else seconds
@@ -34,22 +25,13 @@ FocusScope {
     property string dScheme
     readonly property int bufferIndex: Math.max(0, bufferModes.indexOf(dBuffer))
     readonly property int schemeIndex: Math.max(0, Settings.colorSchemes.findIndex(s => s.id === dScheme))
-    property string testMessage
-    property bool testOk: false
-    property bool testing: false
-    readonly property bool hasSource: m3u ? dPlaylist.length > 0 : dHost.length > 0
+    // The streaming profile only matters to TVHeadend.
+    readonly property bool hasTvheadend: Sources.sources.some(s => s.type === "tvheadend")
+    readonly property Item firstRow: sourceRepeater.count > 0 ? sourceRepeater.itemAt(0) : addSourceRow
 
-    readonly property bool dirty: dBackend !== Settings.backend || dPlaylist !== Settings.playlistUrl || dXmltv !== Settings.xmltvUrl || dHost !== Settings.host || dPort !== Settings.port || dHttps !== Settings.useHttps || dUser !== Settings.username || dPassword !== null || dProfile !== Settings.streamProfile || dDays !== Settings.guideDays || dBuffer !== Settings.playbackBuffer || dStopInBackground !== Settings.stopInBackground || dConfirmQuit !== Settings.confirmQuit || dScheme !== Settings.colorScheme
+    readonly property bool dirty: dProfile !== Settings.streamProfile || dDays !== Settings.guideDays || dBuffer !== Settings.playbackBuffer || dStopInBackground !== Settings.stopInBackground || dConfirmQuit !== Settings.confirmQuit || dScheme !== Settings.colorScheme
 
     function load() {
-        dBackend = Settings.backend;
-        dPlaylist = Settings.playlistUrl;
-        dXmltv = Settings.xmltvUrl;
-        dHost = Settings.host;
-        dPort = Settings.port;
-        dHttps = Settings.useHttps;
-        dUser = Settings.username;
-        dPassword = null;
         dProfile = Settings.streamProfile;
         dDays = Settings.guideDays;
         dBuffer = Settings.playbackBuffer;
@@ -65,14 +47,7 @@ FocusScope {
     }
 
     function values() {
-        const v = {
-            backend: dBackend,
-            playlistUrl: dPlaylist,
-            xmltvUrl: dXmltv,
-            host: dHost,
-            port: dPort,
-            useHttps: dHttps,
-            username: dUser,
+        return {
             streamProfile: dProfile,
             guideDays: dDays,
             playbackBuffer: dBuffer,
@@ -80,15 +55,23 @@ FocusScope {
             confirmQuit: dConfirmQuit,
             colorScheme: dScheme
         };
-        if (dPassword !== null)
-            v.password = dPassword;
-        return v;
     }
 
     function save() {
         Settings.save(values());
-        dPassword = null;
-        testMessage = "";
+    }
+
+    function editSource(id) {
+        editor.open(id);
+        editor.visible = true;
+    }
+
+    // The status line of a source on the Sources list.
+    function sourceDescription(source) {
+        if (!source.enabled)
+            return qsTr("%1 · disabled").arg(Sources.typeName(source.type));
+        const status = Tvh.sourceStatus.find(s => s.id === source.id);
+        return status ? qsTr("%1 · %2").arg(Sources.typeName(source.type)).arg(status.text) : Sources.typeName(source.type);
     }
 
     Component.onCompleted: load()
@@ -99,15 +82,6 @@ FocusScope {
             // Leaving without saving ends the preview.
             dScheme = Settings.colorScheme;
             Settings.previewColorScheme(dScheme);
-        }
-    }
-
-    Connections {
-        target: Tvh
-        function onConnectionTestFinished(ok, message) {
-            root.testing = false;
-            root.testOk = ok;
-            root.testMessage = message;
         }
     }
 
@@ -141,6 +115,7 @@ FocusScope {
     // --- Form ---------------------------------------------------------
     Flickable {
         id: formView
+        visible: !editor.visible
         x: Theme.margin
         y: 11
         width: 720
@@ -169,7 +144,7 @@ FocusScope {
                 spacing: 3
 
                 Text {
-                    text: qsTr("Server")
+                    text: qsTr("Sources")
                     color: Theme.accent
                     font.pixelSize: Theme.fontSmall
                     font.weight: Font.DemiBold
@@ -180,115 +155,55 @@ FocusScope {
                     bottomPadding: 5
                 }
 
-                BigscreenUI.ComboBoxDelegate {
-                    id: sourceRow
-                    width: parent.width
-                    focus: true
-                    text: qsTr("Source")
-                    model: [qsTr("TVHeadend"), qsTr("M3U + XMLTV")]
-                    currentIndex: root.m3u ? 1 : 0
+                Repeater {
+                    id: sourceRepeater
+                    model: Sources.sources
 
-                    onActivated: index => {
-                        root.dBackend = index === 1 ? "m3u" : "tvheadend";
-                        currentIndex = Qt.binding(() => root.m3u ? 1 : 0);
+                    delegate: BigscreenUI.ButtonDelegate {
+                        id: sourceRow
+                        required property var modelData
+                        required property int index
+                        width: form.width
+                        focus: sourceRow.index === 0
+                        text: sourceRow.modelData.name
+                        description: root.sourceDescription(sourceRow.modelData)
+                        trailing: EditIcon {}
+                        onClicked: root.editSource(sourceRow.modelData.id)
+                        Keys.onUpPressed: {
+                            if (sourceRow.index > 0)
+                                sourceRepeater.itemAt(sourceRow.index - 1).forceActiveFocus();
+                            else
+                                root.exitUp();
+                        }
+                        Keys.onDownPressed: {
+                            if (sourceRow.index < sourceRepeater.count - 1)
+                                sourceRepeater.itemAt(sourceRow.index + 1).forceActiveFocus();
+                            else
+                                addSourceRow.forceActiveFocus();
+                        }
+                        KeyNavigation.right: saveButton
                     }
-
-                    KeyNavigation.down: hostRow
-                    KeyNavigation.right: testButton
-                    Keys.onUpPressed: root.exitUp()
                 }
                 BigscreenUI.ButtonDelegate {
-                    id: hostRow
+                    id: addSourceRow
                     width: parent.width
-                    visible: !root.m3u
-                    text: qsTr("Address")
-                    description: root.dHost.length > 0 ? root.dHost : qsTr("e.g. 192.168.1.10")
-                    trailing: EditIcon {}
-                    onClicked: root.editText(text, root.dHost, "text", v => root.dHost = v.trim())
-                    KeyNavigation.up: sourceRow
-                    KeyNavigation.down: portRow
-                    KeyNavigation.right: testButton
-                }
-                BigscreenUI.ButtonDelegate {
-                    id: portRow
-                    width: parent.width
-                    visible: !root.m3u
-                    text: qsTr("Port")
-                    description: root.dPort
-                    trailing: EditIcon {}
-
-                    onClicked: root.editText(text, String(root.dPort), "number", v => {
-                        const p = parseInt(v);
-
-                        if (p > 0 && p < 65536)
-                            root.dPort = p;
-                    })
-
-                    KeyNavigation.up: hostRow
-                    KeyNavigation.down: httpsRow
-                    KeyNavigation.right: testButton
-                }
-                BigscreenUI.SwitchDelegate {
-                    id: httpsRow
-                    width: parent.width
-                    visible: !root.m3u
-                    text: qsTr("Use HTTPS")
-                    checked: root.dHttps
-
-                    onToggled: {
-                        root.dHttps = checked;
-                        checked = Qt.binding(() => root.dHttps);
+                    focus: sourceRepeater.count === 0
+                    text: qsTr("Add source")
+                    description: qsTr("TVHeadend, an M3U playlist, …")
+                    trailing: Kirigami.Icon {
+                        source: "list-add"
+                        implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                        implicitHeight: Kirigami.Units.iconSizes.smallMedium
                     }
-
-                    KeyNavigation.up: portRow
-                    KeyNavigation.down: playlistRow
-                    KeyNavigation.right: testButton
-                }
-                BigscreenUI.ButtonDelegate {
-                    id: playlistRow
-                    width: parent.width
-                    visible: root.m3u
-                    text: qsTr("Playlist (M3U)")
-                    description: root.dPlaylist.length > 0 ? root.dPlaylist : qsTr("e.g. http://192.168.1.10:9191/output/m3u")
-                    trailing: EditIcon {}
-                    onClicked: root.editText(text, root.dPlaylist, "text", v => root.dPlaylist = v.trim())
-                    KeyNavigation.up: httpsRow
-                    KeyNavigation.down: xmltvRow
-                    KeyNavigation.right: testButton
-                }
-                BigscreenUI.ButtonDelegate {
-                    id: xmltvRow
-                    width: parent.width
-                    visible: root.m3u
-                    text: qsTr("Guide (XMLTV)")
-                    description: root.dXmltv.length > 0 ? root.dXmltv : qsTr("from the playlist")
-                    trailing: EditIcon {}
-                    onClicked: root.editText(text, root.dXmltv, "text", v => root.dXmltv = v.trim())
-                    KeyNavigation.up: playlistRow
-                    KeyNavigation.down: userRow
-                    KeyNavigation.right: testButton
-                }
-                BigscreenUI.ButtonDelegate {
-                    id: userRow
-                    width: parent.width
-                    text: qsTr("Username")
-                    description: root.dUser.length > 0 ? root.dUser : qsTr("none (anonymous)")
-                    trailing: EditIcon {}
-                    onClicked: root.editText(text, root.dUser, "text", v => root.dUser = v.trim())
-                    KeyNavigation.up: xmltvRow
-                    KeyNavigation.down: passwordRow
-                    KeyNavigation.right: testButton
-                }
-                BigscreenUI.ButtonDelegate {
-                    id: passwordRow
-                    width: parent.width
-                    text: qsTr("Password")
-                    description: root.dPassword !== null ? "•".repeat(Math.min(root.dPassword.length, 16)) : (Settings.hasPassword ? "••••••••" : qsTr("not set"))
-                    trailing: EditIcon {}
-                    onClicked: root.editText(text, "", "password", v => root.dPassword = v)
-                    KeyNavigation.up: userRow
-                    KeyNavigation.down: profileRow
-                    KeyNavigation.right: testButton
+                    onClicked: root.editSource("")
+                    Keys.onUpPressed: {
+                        if (sourceRepeater.count > 0)
+                            sourceRepeater.itemAt(sourceRepeater.count - 1).forceActiveFocus();
+                        else
+                            root.exitUp();
+                    }
+                    KeyNavigation.down: root.hasTvheadend ? profileRow : bufferRow
+                    KeyNavigation.right: saveButton
                 }
 
                 Text {
@@ -306,14 +221,14 @@ FocusScope {
                 BigscreenUI.ButtonDelegate {
                     id: profileRow
                     width: parent.width
-                    visible: !root.m3u
+                    visible: root.hasTvheadend
                     text: qsTr("Streaming profile")
                     description: root.dProfile.length > 0 ? root.dProfile : "pass"
                     trailing: EditIcon {}
                     onClicked: root.editText(text, root.dProfile, "text", v => root.dProfile = v.trim().length > 0 ? v.trim() : "pass")
-                    KeyNavigation.up: passwordRow
+                    KeyNavigation.up: addSourceRow
                     KeyNavigation.down: bufferRow
-                    KeyNavigation.right: testButton
+                    KeyNavigation.right: saveButton
                 }
                 BigscreenUI.ButtonDelegate {
                     id: bufferRow
@@ -338,9 +253,9 @@ FocusScope {
                     onClicked: root.dBuffer = root.bufferModes[(root.bufferIndex + 1) % root.bufferModes.length]
                     Keys.onLeftPressed: root.dBuffer = root.bufferModes[Math.max(0, root.bufferIndex - 1)]
                     Keys.onRightPressed: root.dBuffer = root.bufferModes[Math.min(root.bufferModes.length - 1, root.bufferIndex + 1)]
-                    KeyNavigation.up: profileRow
+                    KeyNavigation.up: root.hasTvheadend ? profileRow : addSourceRow
                     KeyNavigation.down: backgroundRow
-                    KeyNavigation.right: testButton
+                    KeyNavigation.right: saveButton
                 }
                 BigscreenUI.SwitchDelegate {
                     id: backgroundRow
@@ -355,7 +270,7 @@ FocusScope {
 
                     KeyNavigation.up: bufferRow
                     KeyNavigation.down: confirmQuitRow
-                    KeyNavigation.right: testButton
+                    KeyNavigation.right: saveButton
                 }
                 BigscreenUI.SwitchDelegate {
                     id: confirmQuitRow
@@ -370,7 +285,7 @@ FocusScope {
 
                     KeyNavigation.up: backgroundRow
                     KeyNavigation.down: daysRow
-                    KeyNavigation.right: testButton
+                    KeyNavigation.right: saveButton
                 }
                 // Left/right change the value; too many choices for a ComboBoxDelegate.
                 BigscreenUI.ButtonDelegate {
@@ -420,8 +335,8 @@ FocusScope {
                     }
 
                     KeyNavigation.up: daysRow
-                    KeyNavigation.down: testButton
-                    KeyNavigation.right: testButton
+                    KeyNavigation.down: saveButton
+                    KeyNavigation.right: saveButton
                 }
             }
         }
@@ -436,6 +351,7 @@ FocusScope {
     // --- Status & actions --------------------------------------------
     Column {
         id: side
+        visible: !editor.visible
         anchors.left: formView.right
         anchors.leftMargin: 32
         anchors.right: parent.right
@@ -474,8 +390,21 @@ FocusScope {
                         elide: Text.ElideRight
                     }
                 }
+                // With several sources, each one's state.
+                Repeater {
+                    model: Tvh.sourceStatus.length > 1 ? Tvh.sourceStatus : []
+                    delegate: Text {
+                        id: statusLine
+                        required property var modelData
+                        width: statusColumn.width
+                        text: statusLine.modelData.name + " · " + statusLine.modelData.text
+                        color: statusLine.modelData.status === Tvh.Offline ? Theme.danger : Theme.textDim
+                        font.pixelSize: Theme.fontSmall
+                        elide: Text.ElideRight
+                    }
+                }
                 Text {
-                    visible: Tvh.serverVersion.length > 0
+                    visible: Tvh.serverVersion.length > 0 && Tvh.sourceStatus.length <= 1
                     text: Tvh.serverName + " " + Tvh.serverVersion
                     color: Theme.textDim
                     font.pixelSize: Theme.fontSmall
@@ -493,41 +422,18 @@ FocusScope {
                     font.pixelSize: Theme.fontTiny
                     wrapMode: Text.Wrap
                 }
-                Text {
-                    width: parent.width
-                    visible: root.testMessage.length > 0 || root.testing
-                    text: root.testing ? qsTr("Testing connection…") : (root.testOk ? "✓ " : "✗ ") + root.testMessage
-                    color: root.testing ? Theme.textDim : (root.testOk ? Theme.success : Theme.danger)
-                    font.pixelSize: Theme.fontSmall
-                    wrapMode: Text.Wrap
-                }
             }
         }
 
         TvButton {
-            id: testButton
-            width: parent.width
-            text: qsTr("Test connection")
-            icon.name: "network-connect"
-            available: root.hasSource && !root.testing
-            onActivated: {
-                root.testing = true;
-                root.testMessage = "";
-                Tvh.testConnection(root.values());
-            }
-            KeyNavigation.left: sourceRow
-            KeyNavigation.down: saveButton
-            Keys.onUpPressed: root.exitUp()
-        }
-        TvButton {
             id: saveButton
             width: parent.width
-            text: root.dirty ? qsTr("Save & connect") : qsTr("Saved")
+            text: root.dirty ? qsTr("Save") : qsTr("Saved")
             icon.name: root.dirty ? "document-save" : "dialog-ok"
-            available: root.dirty && root.hasSource
+            available: root.dirty
             onActivated: root.save()
-            KeyNavigation.left: sourceRow
-            KeyNavigation.up: testButton
+            KeyNavigation.left: root.firstRow
+            Keys.onUpPressed: root.exitUp()
             KeyNavigation.down: refreshButton
         }
         TvButton {
@@ -537,7 +443,7 @@ FocusScope {
             icon.name: "view-refresh"
             available: Settings.configured && !Tvh.busy
             onActivated: Tvh.refresh()
-            KeyNavigation.left: sourceRow
+            KeyNavigation.left: root.firstRow
             KeyNavigation.up: saveButton
             KeyNavigation.down: clearButton
         }
@@ -550,7 +456,7 @@ FocusScope {
                 Tvh.clearCache();
                 Tvh.refresh();
             }
-            KeyNavigation.left: sourceRow
+            KeyNavigation.left: root.firstRow
             KeyNavigation.up: refreshButton
             KeyNavigation.down: quitButton
         }
@@ -560,7 +466,7 @@ FocusScope {
             text: qsTr("Quit application")
             icon.name: "application-exit"
             onActivated: Qt.quit()
-            KeyNavigation.left: sourceRow
+            KeyNavigation.left: root.firstRow
             KeyNavigation.up: clearButton
         }
 
@@ -571,6 +477,18 @@ FocusScope {
             color: Theme.textFaint
             font.pixelSize: Theme.fontTiny
             wrapMode: Text.Wrap
+        }
+    }
+
+    // Edit page of one source, over the rest of the page.
+    SourceEditor {
+        id: editor
+        anchors.fill: parent
+        visible: false
+        onEditText: (title, value, mode, callback) => root.editText(title, value, mode, callback)
+        onDone: {
+            visible = false;
+            root.firstRow.forceActiveFocus();
         }
     }
 }

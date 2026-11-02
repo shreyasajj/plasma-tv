@@ -33,7 +33,7 @@ Item {
             paused = true;
 
             if (!timeshifting && !recorder.recording) {
-                recorder.start(channelUuid, Tvh.channels.get(Tvh.channels.indexOfUuid(channelUuid)).name ?? "");
+                recorder.start(player.source, Tvh.channels.get(Tvh.channels.indexOfUuid(channelUuid)).name ?? "");
             }
 
             return;
@@ -95,6 +95,8 @@ Item {
             reconnect.restart();
         } else {
             error = message;
+            // E.g. an Xtream account used on another device; replaces the message if so.
+            Tvh.explainStreamError(channelUuid);
         }
     }
 

@@ -148,6 +148,19 @@ qt_add_qml_module(flimmer
         src/epgdatabase.h src/epgdatabase.cpp
         src/epgstore.h src/epgstore.cpp
         src/channelmodel.h src/channelmodel.cpp
+        src/sources/sourceconfig.h src/sources/sourceconfig.cpp
+        src/sources/headers.h src/sources/headers.cpp
+        src/sources/source.h src/sources/source.cpp
+        src/sources/sourcefactory.cpp
+        src/sources/channelid.h src/sources/channelid.cpp
+        src/sources/secretstore.h src/sources/secretstore.cpp
+        src/sources/sourcesettings.h src/sources/sourcesettings.cpp
+        src/sources/tvheadendsource.h src/sources/tvheadendsource.cpp
+        src/sources/m3usource.h src/sources/m3usource.cpp
+        src/sources/xtream.h src/sources/xtream.cpp
+        src/sources/xtreamsource.h src/sources/xtreamsource.cpp
+        src/sources/stalker.h src/sources/stalker.cpp
+        src/sources/stalkersource.h src/sources/stalkersource.cpp
         src/tvhbackend.h src/tvhbackend.cpp
         src/screensaverinhibitor.h src/screensaverinhibitor.cpp
         src/logoimageprovider.h src/logoimageprovider.cpp
@@ -161,6 +174,7 @@ qt_add_qml_module(flimmer
         qml/ChannelsPage.qml
         qml/GuidePage.qml
         qml/SettingsPage.qml
+        qml/SourceEditor.qml
         qml/TvButton.qml
         qml/TextEntryDialog.qml
         qml/EventDialog.qml
@@ -173,7 +187,7 @@ qt_add_qml_module(flimmer
         data/icons/symbolic/behind-live.svg
 )
 
-target_include_directories(flimmer PRIVATE src)
+target_include_directories(flimmer PRIVATE src src/sources)
 target_link_libraries(
     flimmer
     PRIVATE

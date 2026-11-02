@@ -206,7 +206,7 @@ QUrl ChannelModel::iconUrl(int row) const
     }
 
     const QString icon = m_channels.at(row).icon;
-    if (icon.isEmpty() || m_baseUrl.isEmpty()) {
+    if (icon.isEmpty()) {
         return {};
     }
 
@@ -215,5 +215,11 @@ QUrl ChannelModel::iconUrl(int row) const
         return {};
     }
 
-    return m_baseUrl.resolved(QUrl(icon));
+    // Sources report absolute addresses; relative ones need a base.
+    const QUrl url(icon);
+    if (!url.isRelative()) {
+        return url;
+    }
+
+    return m_baseUrl.isEmpty() ? QUrl() : m_baseUrl.resolved(url);
 }

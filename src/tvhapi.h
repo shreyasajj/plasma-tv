@@ -8,6 +8,7 @@
 #define TVHAPI_H
 
 #include "serverconfig.h"
+#include "sources/headers.h"
 
 #include <QJsonDocument>
 #include <QObject>
@@ -44,6 +45,12 @@ public:
     explicit TvhApi(QObject *parent = nullptr);
 
     void setServer(const ServerConfig &config);
+    // Sent with every request, e.g. a User-Agent a provider wants.
+    void setHeaders(const Headers &headers)
+    {
+        m_headers = headers;
+    }
+
     [[nodiscard]] const ServerConfig &server() const
     {
         return m_server;
@@ -65,6 +72,7 @@ private:
 
     QNetworkAccessManager *m_networkManager;
     ServerConfig m_server;
+    Headers m_headers;
     QSet<QNetworkReply *> m_pending;
 };
 

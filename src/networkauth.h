@@ -7,21 +7,28 @@
 #ifndef NETWORKAUTH_H
 #define NETWORKAUTH_H
 
-#include "serverconfig.h"
+#include <QList>
+#include <QString>
 
 class QNetworkAccessManager;
 class QNetworkReply;
 
 namespace NetworkAuth
 {
-// Thread-safe snapshot of the active server credentials. Used by network
-// access managers living on other threads (e.g. the QML image loader).
-void setActiveServer(const ServerConfig &config);
-ServerConfig activeServer();
+struct HostCredentials {
+    QString host;
+    QString username;
+    QString password;
+};
+
+// Thread-safe list of the sources' credentials, one entry per host. Used by
+// network access managers living on other threads (e.g. the QML image loader).
+void setCredentials(const QList<HostCredentials> &credentials);
+QList<HostCredentials> credentials();
 
 // Answers HTTP Basic/Digest challenges from TVHeadend. Credentials can be
-// overridden per reply with setReplyCredentials(); otherwise the active
-// server credentials are used. Each reply gets exactly one attempt so wrong
+// overridden per reply with setReplyCredentials(); otherwise those of the
+// reply's host are used. Each reply gets exactly one attempt so wrong
 // credentials fail fast instead of looping.
 void install(const QNetworkAccessManager *networkManager);
 void setReplyCredentials(QNetworkReply *reply, const QString &user, const QString &password);

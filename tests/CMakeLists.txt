@@ -71,6 +71,14 @@ flimmer_add_test(
 )
 
 flimmer_add_test(
+    test_sourceconfig
+    SOURCES
+        ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
+    LIBRARIES Qt6::Core
+)
+
+flimmer_add_test(
     test_streamproxy
     SOURCES
         ${PROJECT_SOURCE_DIR}/src/streamproxy.cpp
@@ -79,3 +87,59 @@ flimmer_add_test(
         ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
     LIBRARIES Qt6::Core Qt6::Network
 )
+
+flimmer_add_test(
+    test_channelid
+    SOURCES
+        ${PROJECT_SOURCE_DIR}/src/sources/channelid.cpp
+    LIBRARIES Qt6::Core
+)
+
+flimmer_add_test(
+    test_sourcesettings
+    SOURCES
+        ${PROJECT_SOURCE_DIR}/src/sources/sourcesettings.h
+        ${PROJECT_SOURCE_DIR}/src/sources/sourcesettings.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/secretstore.h
+        ${PROJECT_SOURCE_DIR}/src/sources/secretstore.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
+    LIBRARIES Qt6::Core Qt6::Network Qt6::Qml Qt6Keychain::Qt6Keychain
+)
+
+flimmer_add_test(
+    test_xtream
+    SOURCES
+        fakeserver.h
+        ${PROJECT_SOURCE_DIR}/src/sources/xtream.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/xtreamsource.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/source.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/headers.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/tvhapi.cpp
+        ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
+        ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/xmltv.cpp
+        ${PROJECT_SOURCE_DIR}/src/epgstore.cpp
+    LIBRARIES Qt6::Core Qt6::Network
+)
+target_compile_definitions(test_xtream PRIVATE FLIMMER_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+
+flimmer_add_test(
+    test_stalker
+    SOURCES
+        fakeserver.h
+        ${PROJECT_SOURCE_DIR}/src/sources/stalker.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/stalkersource.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/source.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/headers.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/tvhapi.cpp
+        ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
+        ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/xmltv.cpp
+        ${PROJECT_SOURCE_DIR}/src/epgstore.cpp
+    LIBRARIES Qt6::Core Qt6::Network
+)
+target_compile_definitions(test_stalker PRIVATE FLIMMER_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")

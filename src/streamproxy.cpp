@@ -80,6 +80,12 @@ private:
         upstreamRequest.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("flimmer/0.1"));
         upstreamRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                                      QNetworkRequest::NoLessSafeRedirectPolicy);
+
+        // The source's own headers win, a User-Agent included.
+        for (const auto &[name, value] : m_target.headers) {
+            upstreamRequest.setRawHeader(name, value);
+        }
+
         m_reply = m_networkManager->get(upstreamRequest);
         // Always set, even empty: otherwise the server's credentials would be used.
         NetworkAuth::setReplyCredentials(m_reply, m_target.username, m_target.password);
@@ -338,8 +344,8 @@ bool StreamProxy::listen()
 }
 
 QUrl StreamProxy::relay(const QUrl &upstream,
-                        const QString &username,
-                        const QString &password,
+                        const ServerConfig &server,
+                        const Headers &headers,
                         int bufferMode)
 {
     if (!listen()) {
@@ -352,7 +358,11 @@ QUrl StreamProxy::relay(const QUrl &upstream,
     const QString token = QString::fromLatin1(
         QByteArray(reinterpret_cast<const char *>(random), sizeof(random)).toHex());
 
-    Target target{upstream, username, password, bufferMode};
+    Target target{.url = upstream,
+                  .username = server.username,
+                  .password = server.password,
+                  .headers = headers,
+                  .bufferMode = bufferMode};
 
     if (!upstream.userName().isEmpty()) {
         target.username = upstream.userName();

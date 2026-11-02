@@ -4,9 +4,7 @@
 
 #include "streamrecorder.h"
 
-#include "appsettings.h"
 #include "networkauth.h"
-#include "tvhbackend.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -71,7 +69,7 @@ void StreamRecorder::removeLeftovers()
     }
 }
 
-void StreamRecorder::start(const QString &channelUuid, const QString &channelName)
+void StreamRecorder::start(const QUrl &url, const QString &channelName)
 {
     stop();
 
@@ -96,8 +94,6 @@ void StreamRecorder::start(const QString &channelUuid, const QString &channelNam
         return;
     }
 
-    const QUrl url = TvhBackend::instance()->streamUrl(channelUuid);
-
     if (!url.isValid() || url.isEmpty()) {
         m_file.close();
         m_file.remove();
@@ -106,13 +102,9 @@ void StreamRecorder::start(const QString &channelUuid, const QString &channelNam
         return;
     }
 
-    // Like the guide, a stream on another host than the server never gets the credentials.
-    const ServerConfig server = AppSettings::instance()->server();
     m_reply = m_networkManager->get(QNetworkRequest(url));
-
-    if (url.host() == server.baseUrl().host()) {
-        NetworkAuth::setReplyCredentials(m_reply, server.username, server.password);
-    }
+    // Credentials are the relay's business; never answer a challenge with the server's.
+    NetworkAuth::setReplyCredentials(m_reply, {}, {});
 
     QNetworkReply *reply = m_reply;
     connect(reply, &QNetworkReply::readyRead, this, [this, reply] {

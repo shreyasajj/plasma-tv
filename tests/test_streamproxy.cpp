@@ -220,7 +220,10 @@ private Q_SLOTS:
         });
         StreamProxy proxy;
         Player player(
-            proxy.relay(server.url(), QStringLiteral("user"), QStringLiteral("secret"), 0));
+            proxy.relay(server.url(),
+                        {.username = QStringLiteral("user"), .password = QStringLiteral("secret")},
+                        {},
+                        0));
 
         QVERIFY(player.waitClosed());
         QCOMPARE(player.body(), data);
