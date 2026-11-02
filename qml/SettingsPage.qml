@@ -26,16 +26,20 @@ FocusScope {
     property var dPassword: null   // null = unchanged
     property string dProfile
     property int dDays: 3
+    // -1 = Auto, 0 = Off, else seconds
+    property int dBuffer: -1
+    readonly property var bufferModes: [-1, 0, 2, 5, 10]
     property bool dStopInBackground: true
     property bool dConfirmQuit: true
     property string dScheme
+    readonly property int bufferIndex: Math.max(0, bufferModes.indexOf(dBuffer))
     readonly property int schemeIndex: Math.max(0, Settings.colorSchemes.findIndex(s => s.id === dScheme))
     property string testMessage
     property bool testOk: false
     property bool testing: false
     readonly property bool hasSource: m3u ? dPlaylist.length > 0 : dHost.length > 0
 
-    readonly property bool dirty: dBackend !== Settings.backend || dPlaylist !== Settings.playlistUrl || dXmltv !== Settings.xmltvUrl || dHost !== Settings.host || dPort !== Settings.port || dHttps !== Settings.useHttps || dUser !== Settings.username || dPassword !== null || dProfile !== Settings.streamProfile || dDays !== Settings.guideDays || dStopInBackground !== Settings.stopInBackground || dConfirmQuit !== Settings.confirmQuit || dScheme !== Settings.colorScheme
+    readonly property bool dirty: dBackend !== Settings.backend || dPlaylist !== Settings.playlistUrl || dXmltv !== Settings.xmltvUrl || dHost !== Settings.host || dPort !== Settings.port || dHttps !== Settings.useHttps || dUser !== Settings.username || dPassword !== null || dProfile !== Settings.streamProfile || dDays !== Settings.guideDays || dBuffer !== Settings.playbackBuffer || dStopInBackground !== Settings.stopInBackground || dConfirmQuit !== Settings.confirmQuit || dScheme !== Settings.colorScheme
 
     function load() {
         dBackend = Settings.backend;
@@ -48,6 +52,7 @@ FocusScope {
         dPassword = null;
         dProfile = Settings.streamProfile;
         dDays = Settings.guideDays;
+        dBuffer = Settings.playbackBuffer;
         dStopInBackground = Settings.stopInBackground;
         dConfirmQuit = Settings.confirmQuit;
         dScheme = Settings.colorScheme;
@@ -70,6 +75,7 @@ FocusScope {
             username: dUser,
             streamProfile: dProfile,
             guideDays: dDays,
+            playbackBuffer: dBuffer,
             stopInBackground: dStopInBackground,
             confirmQuit: dConfirmQuit,
             colorScheme: dScheme
@@ -306,6 +312,33 @@ FocusScope {
                     trailing: EditIcon {}
                     onClicked: root.editText(text, root.dProfile, "text", v => root.dProfile = v.trim().length > 0 ? v.trim() : "pass")
                     KeyNavigation.up: passwordRow
+                    KeyNavigation.down: bufferRow
+                    KeyNavigation.right: testButton
+                }
+                BigscreenUI.ButtonDelegate {
+                    id: bufferRow
+                    width: parent.width
+                    text: qsTr("Playback buffer")
+                    description: root.dBuffer < 0 ? qsTr("Auto: starts instantly, waits longer after the connection stalls") : root.dBuffer === 0 ? qsTr("Off") : qsTr("%1 seconds behind live").arg(root.dBuffer)
+                    trailing: Row {
+                        spacing: 5
+                        Kirigami.Icon {
+                            source: "go-previous"
+                            implicitWidth: Kirigami.Units.iconSizes.small
+                            implicitHeight: Kirigami.Units.iconSizes.small
+                            opacity: root.bufferIndex > 0 ? 1 : 0.3
+                        }
+                        Kirigami.Icon {
+                            source: "go-next"
+                            implicitWidth: Kirigami.Units.iconSizes.small
+                            implicitHeight: Kirigami.Units.iconSizes.small
+                            opacity: root.bufferIndex < root.bufferModes.length - 1 ? 1 : 0.3
+                        }
+                    }
+                    onClicked: root.dBuffer = root.bufferModes[(root.bufferIndex + 1) % root.bufferModes.length]
+                    Keys.onLeftPressed: root.dBuffer = root.bufferModes[Math.max(0, root.bufferIndex - 1)]
+                    Keys.onRightPressed: root.dBuffer = root.bufferModes[Math.min(root.bufferModes.length - 1, root.bufferIndex + 1)]
+                    KeyNavigation.up: profileRow
                     KeyNavigation.down: backgroundRow
                     KeyNavigation.right: testButton
                 }
@@ -320,7 +353,7 @@ FocusScope {
                         checked = Qt.binding(() => root.dStopInBackground);
                     }
 
-                    KeyNavigation.up: profileRow
+                    KeyNavigation.up: bufferRow
                     KeyNavigation.down: confirmQuitRow
                     KeyNavigation.right: testButton
                 }

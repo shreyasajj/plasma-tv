@@ -6,6 +6,7 @@
 
 #include "colorschemes.h"
 #include "networkauth.h"
+#include "streambuffer.h"
 
 #include <QQmlEngine>
 #include <QSettings>
@@ -60,6 +61,8 @@ AppSettings::AppSettings(QObject *parent)
 
     m_guideDays =
         qBound(1, settings.value(QStringLiteral("guide/days"), 3).toInt(), kDefaultGuideDays);
+    m_playbackBuffer = StreamBuffer::normalizeMode(
+        settings.value(QStringLiteral("playback/buffer"), StreamBuffer::Auto).toInt());
 
     m_stopInBackground = settings.value(QStringLiteral("playback/stopInBackground"), true).toBool();
     m_confirmQuit = settings.value(QStringLiteral("playback/confirmQuit"), true).toBool();
@@ -192,6 +195,8 @@ void AppSettings::save(const QVariantMap &values)
     m_guideDays = qBound(1,
                          values.value(QStringLiteral("guideDays"), m_guideDays).toInt(),
                          kDefaultGuideDays);
+    m_playbackBuffer = StreamBuffer::normalizeMode(
+        values.value(QStringLiteral("playbackBuffer"), m_playbackBuffer).toInt());
     m_stopInBackground =
         values.value(QStringLiteral("stopInBackground"), m_stopInBackground).toBool();
     m_confirmQuit = values.value(QStringLiteral("confirmQuit"), m_confirmQuit).toBool();
@@ -209,6 +214,7 @@ void AppSettings::save(const QVariantMap &values)
     settings.endGroup();
     settings.setValue(QStringLiteral("playback/profile"), m_streamProfile);
     settings.setValue(QStringLiteral("guide/days"), m_guideDays);
+    settings.setValue(QStringLiteral("playback/buffer"), m_playbackBuffer);
     settings.setValue(QStringLiteral("playback/stopInBackground"), m_stopInBackground);
     settings.setValue(QStringLiteral("playback/confirmQuit"), m_confirmQuit);
     settings.setValue(QStringLiteral("appearance/colorScheme"), m_colorScheme);

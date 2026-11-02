@@ -37,6 +37,8 @@ class AppSettings : public QObject
     Q_PROPERTY(QString xmltvUrl READ xmltvUrl NOTIFY changed)
     Q_PROPERTY(QString streamProfile READ streamProfile NOTIFY changed)
     Q_PROPERTY(int guideDays READ guideDays NOTIFY changed)
+    // Seconds behind live: -1 = Auto (grows after stalls), 0 = Off, 2, 5 or 10.
+    Q_PROPERTY(int playbackBuffer READ playbackBuffer NOTIFY changed)
     Q_PROPERTY(bool stopInBackground READ stopInBackground NOTIFY changed)
     Q_PROPERTY(bool confirmQuit READ confirmQuit NOTIFY changed)
     Q_PROPERTY(bool configured READ configured NOTIFY changed)
@@ -93,6 +95,11 @@ public:
     [[nodiscard]] QString streamProfile() const
     {
         return m_streamProfile;
+    }
+
+    [[nodiscard]] int playbackBuffer() const
+    {
+        return m_playbackBuffer;
     }
 
     [[nodiscard]] int guideDays() const
@@ -157,8 +164,8 @@ public:
     }
 
     // Expected keys: backend, host, port, useHttps, playlistUrl, xmltvUrl, username, streamProfile,
-    // guideDays, stopInBackground, confirmQuit, colorScheme and, only when the password was edited,
-    // password.
+    // guideDays, playbackBuffer, stopInBackground, confirmQuit, colorScheme and, only when the
+    // password was edited, password.
     Q_INVOKABLE void save(const QVariantMap &values);
 
 Q_SIGNALS:
@@ -178,6 +185,7 @@ private:
     ServerConfig m_server;
     QString m_streamProfile;
     int m_guideDays = 3;
+    int m_playbackBuffer = -1;
     bool m_stopInBackground = true;
     bool m_confirmQuit = true;
     QString m_lastChannel;
