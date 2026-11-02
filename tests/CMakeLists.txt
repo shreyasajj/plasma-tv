@@ -124,7 +124,10 @@ flimmer_add_test(
         ${PROJECT_SOURCE_DIR}/src/epgstore.cpp
     LIBRARIES Qt6::Core Qt6::Network
 )
-target_compile_definitions(test_xtream PRIVATE FLIMMER_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(
+    test_xtream
+    PRIVATE FLIMMER_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
+)
 
 flimmer_add_test(
     test_stalker
@@ -142,4 +145,7 @@ flimmer_add_test(
         ${PROJECT_SOURCE_DIR}/src/epgstore.cpp
     LIBRARIES Qt6::Core Qt6::Network
 )
-target_compile_definitions(test_stalker PRIVATE FLIMMER_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(
+    test_stalker
+    PRIVATE FLIMMER_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
+)

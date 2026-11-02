@@ -44,10 +44,8 @@ public:
     // User-Agent). The credentials of 'server' are answered to the server's challenges; ones in
     // the URL are used instead and removed from it. 'bufferMode' is a StreamBuffer mode. An
     // empty URL means the relay could not be started.
-    QUrl relay(const QUrl &upstream,
-               const ServerConfig &server,
-               const Headers &headers,
-               int bufferMode);
+    QUrl
+    relay(const QUrl &upstream, const ServerConfig &server, const Headers &headers, int bufferMode);
 
     // HLS playlists are fetched by the player itself: relative segment addresses
     // wouldn't resolve against the relay.
