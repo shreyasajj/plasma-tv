@@ -20,11 +20,11 @@ class TvheadendSource : public Source
 public:
     explicit TvheadendSource(const SourceConfig &config, QObject *parent = nullptr);
 
-    Capabilities capabilities() const override
+    [[nodiscard]] Capabilities capabilities() const override
     {
         return {.record = true};
     }
-    QString identity() const override;
+    [[nodiscard]] QString identity() const override;
 
     void refresh(int guideDays) override;
     void requestStream(const QString &channelId) override;
@@ -35,7 +35,7 @@ public:
 private:
     void fetchChannels(int generation);
     void fetchEpgPage(int generation, int offset);
-    QUrl streamUrl(const QString &channelId) const;
+    [[nodiscard]] QUrl streamUrl(const QString &channelId) const;
 
     TvhApi *m_api;
     ServerConfig m_server;

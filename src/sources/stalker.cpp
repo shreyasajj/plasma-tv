@@ -256,7 +256,7 @@ bool Stalker::parseChannels(const QByteArray &data, const QUrl &root, QVector<Ch
 
     channels->clear();
 
-    for (const QJsonValue &value : list.toArray()) {
+    for (const auto &value : list.toArray()) {
         const QJsonObject object = value.toObject();
         Channel channel;
         channel.uuid = text(object.value(QLatin1String("id")));
@@ -302,7 +302,7 @@ bool Stalker::parseGuide(const QByteArray &data, QVector<EpgEvent> *events)
     events->clear();
 
     for (const auto &[channel, list] : groups) {
-        for (const QJsonValue &entry : list) {
+        for (const auto &entry : list) {
             const QJsonObject object = entry.toObject();
             EpgEvent event;
             event.id = text(object.value(QLatin1String("id"))).toLongLong();

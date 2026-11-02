@@ -28,7 +28,7 @@ class StalkerSource : public Source
 public:
     explicit StalkerSource(const SourceConfig &config, QObject *parent = nullptr);
 
-    QString identity() const override;
+    [[nodiscard]] QString identity() const override;
 
     void restoreChannels(const QVector<Channel> &channels) override;
     void refresh(int guideDays) override;
@@ -46,11 +46,11 @@ private:
     using Reply = std::function<void(const ApiResult &result)>;
 
     // Handshake, profile and login, unless there is a token already.
-    void connectPortal(Done done);
-    void handshake(int endpoint, Done done);
-    void signIn(Done done);
+    void connectPortal(const Done &done);
+    void handshake(int endpoint, const Done &done);
+    void signIn(const Done &done);
     // A request with the token; a token the portal no longer accepts is renewed once.
-    void get(const std::function<QUrl()> &url, Reply reply, bool retried = false);
+    void get(const std::function<QUrl()> &url, const Reply &reply, bool retried = false);
     void setToken(const QString &token);
 
     TvhApi *m_api;

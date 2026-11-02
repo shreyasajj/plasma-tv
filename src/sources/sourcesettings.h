@@ -46,36 +46,36 @@ public:
     // Tests pass their own settings and secret store; 'store' becomes a child.
     SourceSettings(QSettings *settings, SecretStore *store, QObject *parent = nullptr);
 
-    QList<SourceConfig> configs() const
+    [[nodiscard]] QList<SourceConfig> configs() const
     {
         return m_sources;
     }
-    SourceConfig config(const QString &id) const;
-    QVariantList sources() const;
+    [[nodiscard]] SourceConfig config(const QString &id) const;
+    [[nodiscard]] QVariantList sources() const;
     static QStringList types();
     // What the Settings page calls a type, e.g. "Xtream Codes".
     Q_INVOKABLE static QString typeName(const QString &type);
     // At least one enabled source.
-    bool configured() const;
-    bool credentialsReady() const
+    [[nodiscard]] bool configured() const;
+    [[nodiscard]] bool credentialsReady() const
     {
         return m_credentialsReady;
     }
-    QString secretStoreStatus() const
+    [[nodiscard]] QString secretStoreStatus() const
     {
         return m_secretStoreStatus;
     }
 
     // One source for its edit page: id, type, name, enabled, its fields and, for each
     // secret, "<key>Set" telling whether one is stored.
-    Q_INVOKABLE QVariantMap source(const QString &id) const;
+    Q_INVOKABLE [[nodiscard]] QVariantMap source(const QString &id) const;
     // Values of the edit page ("id" empty for a new source; secrets only when edited).
     // Returns the source's ID.
     Q_INVOKABLE QString save(const QVariantMap &values);
     Q_INVOKABLE void remove(const QString &id);
     Q_INVOKABLE void move(const QString &id, int delta);
     // The stored source with the edit page's values applied, not saved (to test it).
-    SourceConfig draft(const QVariantMap &values) const;
+    [[nodiscard]] SourceConfig draft(const QVariantMap &values) const;
 
 Q_SIGNALS:
     void changed();
@@ -96,9 +96,9 @@ private:
     void pendingDone();
     void updateNetworkAuth();
     void setSecretStoreStatus(const QString &status);
-    int indexOf(const QString &id) const;
-    QString uniqueId() const;
-    int freeIndex() const;
+    [[nodiscard]] int indexOf(const QString &id) const;
+    [[nodiscard]] QString uniqueId() const;
+    [[nodiscard]] int freeIndex() const;
 
     QSettings *m_settings;
     SecretStore *m_store;

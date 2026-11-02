@@ -58,7 +58,7 @@ void StalkerSource::setToken(const QString &token)
     }
 }
 
-void StalkerSource::connectPortal(Done done)
+void StalkerSource::connectPortal(const Done &done)
 {
     if (!m_root.isValid()) {
         done(tr("Please enter the portal address"));
@@ -78,13 +78,13 @@ void StalkerSource::connectPortal(Done done)
     // Once a path answered, only that one is asked again.
     if (m_endpoint.isValid()) {
         const QList<QUrl> all = Stalker::endpoints(m_root);
-        handshake(int(all.indexOf(m_endpoint)), std::move(done));
+        handshake(static_cast<int>(all.indexOf(m_endpoint)), done);
     } else {
-        handshake(0, std::move(done));
+        handshake(0, done);
     }
 }
 
-void StalkerSource::handshake(int endpoint, Done done)
+void StalkerSource::handshake(int endpoint, const Done &done)
 {
     const QList<QUrl> all = Stalker::endpoints(m_root);
     const QUrl url = all.value(endpoint);
@@ -112,7 +112,7 @@ void StalkerSource::handshake(int endpoint, Done done)
                });
 }
 
-void StalkerSource::signIn(Done done)
+void StalkerSource::signIn(const Done &done)
 {
     m_api->get(Stalker::profileUrl(m_endpoint, m_device), [this, done](const ApiResult &result) {
         if (!result.ok || Stalker::isAuthFailure(result.httpStatus, result.body)
@@ -142,7 +142,7 @@ void StalkerSource::signIn(Done done)
     });
 }
 
-void StalkerSource::get(const std::function<QUrl()> &url, Reply reply, bool retried)
+void StalkerSource::get(const std::function<QUrl()> &url, const Reply &reply, bool retried)
 {
     m_api->get(url(), [this, url, reply, retried](const ApiResult &result) {
         if (!Stalker::isAuthFailure(result.httpStatus, result.body)) {

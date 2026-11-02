@@ -22,7 +22,7 @@ class M3uSource : public Source
 public:
     explicit M3uSource(const SourceConfig &config, QObject *parent = nullptr);
 
-    QString identity() const override;
+    [[nodiscard]] QString identity() const override;
 
     void restoreChannels(const QVector<Channel> &channels) override;
     void refresh(int guideDays) override;

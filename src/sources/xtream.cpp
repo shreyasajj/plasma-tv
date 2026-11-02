@@ -127,11 +127,12 @@ bool Xtream::parseLogin(const QByteArray &data, Account *account)
     account->auth = number(user.value(QLatin1String("auth"))) == 1;
     account->status = text(user.value(QLatin1String("status")));
     account->expires = number(user.value(QLatin1String("exp_date")));
-    account->maxConnections = int(number(user.value(QLatin1String("max_connections"))));
-    account->activeConnections = int(number(user.value(QLatin1String("active_cons"))));
+    account->maxConnections =
+        static_cast<int>(number(user.value(QLatin1String("max_connections"))));
+    account->activeConnections = static_cast<int>(number(user.value(QLatin1String("active_cons"))));
     account->message = text(user.value(QLatin1String("message")));
 
-    for (const QJsonValue &format : user.value(QLatin1String("allowed_output_formats")).toArray()) {
+    for (const auto &format : user.value(QLatin1String("allowed_output_formats")).toArray()) {
         account->formats.append(format.toString());
     }
 
@@ -172,7 +173,7 @@ bool Xtream::parseStreams(const QByteArray &data, Streams *streams)
 
     *streams = {};
 
-    for (const QJsonValue &value : document.array()) {
+    for (const auto &value : document.array()) {
         const QJsonObject object = value.toObject();
         const QString id = text(object.value(QLatin1String("stream_id")));
 
@@ -182,7 +183,7 @@ bool Xtream::parseStreams(const QByteArray &data, Streams *streams)
 
         Channel channel;
         channel.uuid = id;
-        channel.number = int(number(object.value(QLatin1String("num"))));
+        channel.number = static_cast<int>(number(object.value(QLatin1String("num"))));
         channel.name = text(object.value(QLatin1String("name"))).trimmed();
         channel.icon = text(object.value(QLatin1String("stream_icon")));
         streams->channels.append(channel);

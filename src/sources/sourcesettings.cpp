@@ -11,13 +11,18 @@
 #include <QJsonObject>
 #include <QQmlEngine>
 #include <QSettings>
+#include <algorithm>
 
 namespace
 {
-const QString s_list = QStringLiteral("sources");
-const QString s_oldGroup = QStringLiteral("server");
-const QString s_oldSecret = QStringLiteral("server-password");
-const QString s_lastChannel = QStringLiteral("playback/lastChannel");
+const QString s_list = // NOLINT(bugprone-throwing-static-initialization)
+    QStringLiteral("sources");
+const QString s_oldGroup = // NOLINT(bugprone-throwing-static-initialization)
+    QStringLiteral("server");
+const QString s_oldSecret = // NOLINT(bugprone-throwing-static-initialization)
+    QStringLiteral("server-password");
+const QString s_lastChannel = // NOLINT(bugprone-throwing-static-initialization)
+    QStringLiteral("playback/lastChannel");
 // Event IDs keep 42 bits for the source's own ID (see ChannelId).
 constexpr int s_maxIndex = 1024;
 
@@ -264,7 +269,7 @@ void SourceSettings::storeSecrets(const SourceConfig &config)
 void SourceSettings::persist()
 {
     m_settings->remove(s_list);
-    m_settings->beginWriteArray(s_list, int(m_sources.size()));
+    m_settings->beginWriteArray(s_list, static_cast<int>(m_sources.size()));
 
     for (int i = 0; i < m_sources.size(); ++i) {
         const SourceConfig &config = m_sources.at(i);
@@ -311,7 +316,7 @@ QVariantList SourceSettings::sources() const
 
 bool SourceSettings::configured() const
 {
-    return std::any_of(m_sources.cbegin(), m_sources.cend(), [](const SourceConfig &config) {
+    return std::ranges::any_of(m_sources, [](const SourceConfig &config) {
         return config.enabled;
     });
 }
@@ -354,7 +359,7 @@ QString SourceSettings::save(const QVariantMap &values)
         config.id = uniqueId();
         config.index = freeIndex();
         m_sources.append(config);
-        index = int(m_sources.size()) - 1;
+        index = static_cast<int>(m_sources.size()) - 1;
         id = config.id;
     }
 
@@ -421,7 +426,9 @@ void SourceSettings::updateNetworkAuth()
 
         const ServerConfig server = config.serverConfig();
         if (!server.username.isEmpty()) {
-            credentials.append({server.baseUrl().host(), server.username, server.password});
+            credentials.append({.host = server.baseUrl().host(),
+                                .username = server.username,
+                                .password = server.password});
         }
     }
 
@@ -463,10 +470,9 @@ QString SourceSettings::uniqueId() const
 int SourceSettings::freeIndex() const
 {
     for (int index = 0; index < s_maxIndex; ++index) {
-        const bool used =
-            std::any_of(m_sources.cbegin(), m_sources.cend(), [index](const SourceConfig &config) {
-                return config.index == index;
-            });
+        const bool used = std::ranges::any_of(m_sources, [index](const SourceConfig &config) {
+            return config.index == index;
+        });
 
         if (!used) {
             return index;

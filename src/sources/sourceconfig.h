@@ -16,10 +16,14 @@
 // file; 'secrets' (passwords, the MAC address of a Stalker portal, …) only
 // live in memory and go to the system secret store.
 struct SourceConfig {
-    static inline const QString Tvheadend = QStringLiteral("tvheadend");
-    static inline const QString M3u = QStringLiteral("m3u");
-    static inline const QString Xtream = QStringLiteral("xtream");
-    static inline const QString Stalker = QStringLiteral("stalker");
+    static inline const QString Tvheadend = // NOLINT(bugprone-throwing-static-initialization)
+        QStringLiteral("tvheadend");
+    static inline const QString M3u = // NOLINT(bugprone-throwing-static-initialization)
+        QStringLiteral("m3u");
+    static inline const QString Xtream = // NOLINT(bugprone-throwing-static-initialization)
+        QStringLiteral("xtream");
+    static inline const QString Stalker = // NOLINT(bugprone-throwing-static-initialization)
+        QStringLiteral("stalker");
 
     QString id; // "src-3f2a"; prefixes the IDs of the source's channels
     QString type;
@@ -34,18 +38,18 @@ struct SourceConfig {
     // Secret fields of a type; everything else is a plain field.
     static QStringList secretKeys(const QString &type);
 
-    QString field(const QString &key) const
+    [[nodiscard]] QString field(const QString &key) const
     {
         return fields.value(key).toString();
     }
-    QString secret(const QString &key) const
+    [[nodiscard]] QString secret(const QString &key) const
     {
         return secrets.value(key).toString();
     }
-    bool isValid() const;
+    [[nodiscard]] bool isValid() const;
 
     // TVHeadend and M3U settings in the form their code uses, and back.
-    ServerConfig serverConfig() const;
+    [[nodiscard]] ServerConfig serverConfig() const;
     static SourceConfig fromServer(const ServerConfig &server);
 
     // Applies the values of the settings page (same keys as the fields, plus "name",

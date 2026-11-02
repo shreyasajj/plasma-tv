@@ -41,7 +41,7 @@ public:
         // The URL itself holds a secret (Xtream puts the password in the path).
         bool secretUrl = false;
 
-        bool needsRelay() const
+        [[nodiscard]] bool needsRelay() const
         {
             return secretUrl || !username.isEmpty() || !headers.isEmpty()
                 || !url.userInfo().isEmpty();
@@ -51,23 +51,23 @@ public:
     // A new source of the type in 'config'; nullptr for an unknown type.
     static Source *create(const SourceConfig &config, QObject *parent = nullptr);
 
-    explicit Source(const SourceConfig &config, QObject *parent = nullptr);
+    explicit Source(SourceConfig config, QObject *parent = nullptr);
 
-    const SourceConfig &config() const
+    [[nodiscard]] const SourceConfig &config() const
     {
         return m_config;
     }
-    QString id() const
+    [[nodiscard]] QString id() const
     {
         return m_config.id;
     }
 
-    virtual Capabilities capabilities() const
+    [[nodiscard]] virtual Capabilities capabilities() const
     {
         return {};
     }
     // Changes when the cached channels and guide of this source become invalid.
-    virtual QString identity() const = 0;
+    [[nodiscard]] virtual QString identity() const = 0;
 
     // Channels from the cache, before the first refresh() reports fresh ones.
     virtual void restoreChannels(const QVector<Channel> &channels);

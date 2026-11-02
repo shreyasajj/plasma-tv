@@ -15,10 +15,12 @@ namespace
 {
 // Version 4 prefixed channel IDs with their source.
 constexpr int s_schemaVersion = 4;
-const QString s_identityKey = QStringLiteral("source/%1/identity");
+const QString s_identityKey = // NOLINT(bugprone-throwing-static-initialization)
+    QStringLiteral("source/%1/identity");
 
 // Rows of one source: its channel IDs start with "<id>:".
-const QString s_ofSource = QStringLiteral("substr(%1, 1, ?) = ?");
+const QString s_ofSource = // NOLINT(bugprone-throwing-static-initialization)
+    QStringLiteral("substr(%1, 1, ?) = ?");
 }
 
 EpgDatabase::EpgDatabase()

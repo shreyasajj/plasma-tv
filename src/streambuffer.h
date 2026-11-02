@@ -10,6 +10,7 @@
 #include <QByteArray>
 #include <QElapsedTimer>
 
+#include <cstdint>
 #include <deque>
 #include <functional>
 
@@ -44,31 +45,31 @@ public:
     // No more data follows: queue what was held back to decide the format.
     void endOfData();
     // The relay should stop reading from the server until the player took some.
-    bool full() const;
+    [[nodiscard]] bool full() const;
     // The upstream connection broke: forget a partial packet and find the
     // packet boundary again in what the next connection sends.
     void cutForReconnect();
 
-    qint64 size() const
+    [[nodiscard]] qint64 size() const
     {
         return m_queue.size() - m_head;
     }
-    qint64 bufferedMs() const;
-    qint64 targetMs() const
+    [[nodiscard]] qint64 bufferedMs() const;
+    [[nodiscard]] qint64 targetMs() const
     {
         return m_targetMs;
     }
-    bool filling() const
+    [[nodiscard]] bool filling() const
     {
         return m_filling;
     }
-    bool isTransportStream() const
+    [[nodiscard]] bool isTransportStream() const
     {
         return m_format == Format::TransportStream;
     }
 
 private:
-    enum class Format {
+    enum class Format : std::uint8_t {
         Unknown,
         TransportStream,
         Other,
@@ -84,7 +85,7 @@ private:
     void appendBytes(const QByteArray &data);
     void readPcr(const char *packet);
     void stalled();
-    qint64 rateBytesPerSecond() const;
+    [[nodiscard]] qint64 rateBytesPerSecond() const;
 
     std::function<qint64()> m_clock;
     QElapsedTimer m_timer;

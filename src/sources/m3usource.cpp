@@ -90,7 +90,7 @@ void M3uSource::fetchGuide(int generation, const QUrl &url, const Xmltv::Channel
         }
 
         const qint64 now = QDateTime::currentSecsSinceEpoch();
-        const qint64 end = now + qint64(m_guideDays) * 24 * 3600;
+        const qint64 end = now + (static_cast<qint64>(m_guideDays) * 24 * 3600);
         auto events = std::make_shared<QVector<EpgEvent>>();
         auto error = std::make_shared<QString>();
 
@@ -109,7 +109,7 @@ void M3uSource::fetchGuide(int generation, const QUrl &url, const Xmltv::Channel
                 return;
             }
 
-            Q_EMIT guideReady(std::move(*events));
+            Q_EMIT guideReady(*events);
         });
         worker->start();
     });
@@ -163,12 +163,18 @@ void M3uSource::test()
 
         const M3u::Playlist playlist = M3u::parse(result.body, m_server.playlist());
         const bool guide = m_server.xmltv().isValid() || playlist.guideUrl.isValid();
-        Q_EMIT testFinished(
-            !playlist.channels.isEmpty(),
-            playlist.channels.isEmpty()
-                ? tr("The playlist contains no channels")
-                : (guide ? tr("Playlist found: %1 channels").arg(playlist.channels.size())
-                         : tr("Playlist found: %1 channels, but no guide address")
-                               .arg(playlist.channels.size())));
+
+        QString message;
+
+        if (playlist.channels.isEmpty()) {
+            message = tr("The playlist contains no channels");
+        } else if (guide) {
+            message = tr("Playlist found: %1 channels").arg(playlist.channels.size());
+        } else {
+            message = tr("Playlist found: %1 channels, but no guide address")
+                          .arg(playlist.channels.size());
+        }
+
+        Q_EMIT testFinished(!playlist.channels.isEmpty(), message);
     });
 }

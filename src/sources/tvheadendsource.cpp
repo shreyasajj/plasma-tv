@@ -91,7 +91,7 @@ void TvheadendSource::fetchChannels(int generation)
             }
 
             QVector<Channel> channels;
-            for (const QJsonValue &value : entriesOf(result.json())) {
+            for (const auto &value : entriesOf(result.json())) {
                 const QJsonObject object = value.toObject();
                 if (!object.value(QLatin1String("enabled")).toBool(true)) {
                     continue;
@@ -108,20 +108,20 @@ void TvheadendSource::fetchChannels(int generation)
                 channels.append(channel);
             }
 
-            std::stable_sort(channels.begin(),
-                             channels.end(),
-                             [](const Channel &a, const Channel &b) {
-                                 // Unnumbered channels (0) go to the end, alphabetically.
-                                 if ((a.number == 0) != (b.number == 0)) {
-                                     return a.number != 0;
-                                 }
+            std::ranges::stable_sort(channels,
 
-                                 if (a.number != b.number) {
-                                     return a.number < b.number;
-                                 }
+                                     [](const Channel &a, const Channel &b) {
+                                         // Unnumbered channels (0) go to the end, alphabetically.
+                                         if ((a.number == 0) != (b.number == 0)) {
+                                             return a.number != 0;
+                                         }
 
-                                 return a.name.localeAwareCompare(b.name) < 0;
-                             });
+                                         if (a.number != b.number) {
+                                             return a.number < b.number;
+                                         }
+
+                                         return a.name.localeAwareCompare(b.name) < 0;
+                                     });
 
             Q_EMIT channelsReady(channels);
             m_incoming.clear();
@@ -132,7 +132,7 @@ void TvheadendSource::fetchChannels(int generation)
 void TvheadendSource::fetchEpgPage(int generation, int offset)
 {
     const qint64 now = QDateTime::currentSecsSinceEpoch();
-    const qint64 end = now + qint64(m_guideDays) * 24 * 3600;
+    const qint64 end = now + (static_cast<qint64>(m_guideDays) * 24 * 3600);
     const QJsonArray filter{
         QJsonObject{{QStringLiteral("field"), QStringLiteral("stop")},
                     {QStringLiteral("type"), QStringLiteral("numeric")},
@@ -166,7 +166,7 @@ void TvheadendSource::fetchEpgPage(int generation, int offset)
 
                     const QJsonDocument document = result.json();
                     const QJsonArray entries = entriesOf(document);
-                    for (const QJsonValue &value : entries) {
+                    for (const auto &value : entries) {
                         EpgEvent event = EpgEvent::fromJson(value.toObject());
                         // Filter client side as well in case the server ignored the filter.
                         if (event.stop > now && event.start < end) {
@@ -176,7 +176,7 @@ void TvheadendSource::fetchEpgPage(int generation, int offset)
 
                     const int total =
                         document.object().value(QLatin1String("totalCount")).toInt(-1);
-                    const int fetched = offset + int(entries.size());
+                    const int fetched = offset + static_cast<int>(entries.size());
                     const bool more = entries.size() == s_epgPageSize
                         && (total < 0 || fetched < total) && fetched < s_maxEpgEvents;
                     if (more) {

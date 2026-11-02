@@ -216,7 +216,7 @@ QUrl ChannelModel::iconUrl(int row) const
     }
 
     // Sources report absolute addresses; relative ones need a base.
-    const QUrl url(icon);
+    QUrl url(icon);
     if (!url.isRelative()) {
         return url;
     }

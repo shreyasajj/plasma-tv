@@ -10,7 +10,7 @@
 
 namespace
 {
-constexpr qint64 s_eventMask = (qint64(1) << ChannelId::s_eventBits) - 1;
+constexpr qint64 s_eventMask = (static_cast<qint64>(1) << ChannelId::s_eventBits) - 1;
 }
 
 QString ChannelId::make(const QString &sourceId, const QString &ownId)
@@ -32,12 +32,12 @@ QString ChannelId::ownOf(const QString &channelId)
 
 qint64 ChannelId::makeEvent(int sourceIndex, qint64 ownId)
 {
-    return (qint64(sourceIndex) << s_eventBits) | (ownId & s_eventMask);
+    return (static_cast<qint64>(sourceIndex) << s_eventBits) | (ownId & s_eventMask);
 }
 
 int ChannelId::sourceIndexOf(qint64 eventId)
 {
-    return int(eventId >> s_eventBits);
+    return static_cast<int>(eventId >> s_eventBits);
 }
 
 qint64 ChannelId::ownEventOf(qint64 eventId)
@@ -101,7 +101,7 @@ QVector<Channel> ChannelId::merge(const QList<QVector<Channel>> &sources)
     }
 
     // Unnumbered channels go to the end, as within one source.
-    std::stable_sort(result.begin(), result.end(), [](const Channel &a, const Channel &b) {
+    std::ranges::stable_sort(result, [](const Channel &a, const Channel &b) {
         if ((a.number == 0) != (b.number == 0)) {
             return a.number != 0;
         }

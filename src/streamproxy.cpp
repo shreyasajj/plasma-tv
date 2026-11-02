@@ -15,6 +15,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
+#include <utility>
 
 namespace
 {
@@ -52,12 +53,12 @@ class Session : public QObject
 public:
     Session(QTcpSocket *socket,
             const StreamProxy::Target &target,
-            const StreamProxy::Timing &timing,
+            StreamProxy::Timing timing,
             QNetworkAccessManager *networkManager)
         : QObject(socket)
         , m_socket(socket)
         , m_target(target)
-        , m_timing(timing)
+        , m_timing(std::move(timing))
         , m_networkManager(networkManager)
         , m_buffer(target.bufferMode)
     {

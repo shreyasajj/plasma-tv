@@ -121,7 +121,7 @@ void SourceConfig::apply(const QVariantMap &values)
                 secrets.insert(key, value);
             }
         } else {
-            const QVariant value = it.value();
+            const QVariant &value = it.value();
             fields.insert(key,
                           value.typeId() == QMetaType::QString
                               ? QVariant(value.toString().trimmed())

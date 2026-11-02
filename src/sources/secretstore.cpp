@@ -8,7 +8,8 @@
 
 namespace
 {
-const QString s_service = QStringLiteral("flimmer");
+const QString s_service = // NOLINT(bugprone-throwing-static-initialization)
+    QStringLiteral("flimmer");
 
 void run(QKeychain::Job *job, const QString &key, SecretStore::Callback done)
 {

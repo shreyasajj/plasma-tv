@@ -106,7 +106,7 @@ void XtreamSource::fetchGuide(int generation, const Xmltv::ChannelMap &map)
             }
 
             const qint64 now = QDateTime::currentSecsSinceEpoch();
-            const qint64 end = now + qint64(m_guideDays) * 24 * 3600;
+            const qint64 end = now + (static_cast<qint64>(m_guideDays) * 24 * 3600);
             auto events = std::make_shared<QVector<EpgEvent>>();
             auto error = std::make_shared<QString>();
 
@@ -125,7 +125,7 @@ void XtreamSource::fetchGuide(int generation, const Xmltv::ChannelMap &map)
                     return;
                 }
 
-                Q_EMIT guideReady(std::move(*events));
+                Q_EMIT guideReady(*events);
             });
             worker->start();
         });

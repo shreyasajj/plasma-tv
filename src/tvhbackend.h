@@ -90,7 +90,7 @@ public:
     }
 
     [[nodiscard]] bool canRecord() const;
-    Q_INVOKABLE bool canRecordChannel(const QString &uuid) const;
+    Q_INVOKABLE [[nodiscard]] bool canRecordChannel(const QString &uuid) const;
     [[nodiscard]] QVariantList sourceStatus() const;
 
     [[nodiscard]] QDateTime lastUpdate() const
@@ -165,8 +165,8 @@ private:
     void sourceRemoved(const QString &id);
     void sourcesReordered();
     SourceState *state(const QString &id);
-    const SourceState *stateOfChannel(const QString &uuid) const;
-    void refreshSource(SourceState &state);
+    [[nodiscard]] const SourceState *stateOfChannel(const QString &uuid) const;
+    static void refreshSource(SourceState &state);
     void refreshOffline();
     void loadCache();
     void mergeChannels();

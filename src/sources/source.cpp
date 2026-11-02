@@ -4,9 +4,11 @@
 
 #include "source.h"
 
-Source::Source(const SourceConfig &config, QObject *parent)
+#include <utility>
+
+Source::Source(SourceConfig config, QObject *parent)
     : QObject(parent)
-    , m_config(config)
+    , m_config(std::move(config))
 {
 }
 

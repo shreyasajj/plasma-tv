@@ -68,9 +68,9 @@ public:
         return m_confirmQuit;
     }
 
-    [[nodiscard]] bool configured() const;
-    [[nodiscard]] bool credentialsReady() const;
-    [[nodiscard]] QString secretStoreStatus() const;
+    [[nodiscard]] static bool configured();
+    [[nodiscard]] static bool credentialsReady();
+    [[nodiscard]] static QString secretStoreStatus();
 
     [[nodiscard]] QString lastChannel() const
     {

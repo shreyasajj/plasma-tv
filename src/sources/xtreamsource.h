@@ -21,7 +21,7 @@ class XtreamSource : public Source
 public:
     explicit XtreamSource(const SourceConfig &config, QObject *parent = nullptr);
 
-    QString identity() const override;
+    [[nodiscard]] QString identity() const override;
 
     void refresh(int guideDays) override;
     void requestStream(const QString &channelId) override;

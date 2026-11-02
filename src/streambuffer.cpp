@@ -5,6 +5,7 @@
 #include "streambuffer.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdlib>
 
 namespace
@@ -12,15 +13,15 @@ namespace
 constexpr char s_sync = 0x47;
 // PCR runs at 90 kHz and wraps after 33 bits.
 constexpr qint64 s_pcrPerMs = 90;
-constexpr qint64 s_pcrMask = (qint64(1) << 33) - 1;
+constexpr qint64 s_pcrMask = (static_cast<qint64>(1) << 33) - 1;
 // A larger jump between two PCRs is a gap in the stream, not playing time.
-constexpr qint64 s_maxPcrStep = 10 * 1000 * s_pcrPerMs;
+constexpr qint64 s_maxPcrStep = static_cast<qint64>(10 * 1000) * s_pcrPerMs;
 // Junk the start of a stream may have before the first packet.
-constexpr qsizetype s_maxSyncSearch = 8 * 1024;
+constexpr qsizetype s_maxSyncSearch = static_cast<const qsizetype>(8 * 1024);
 // Bytes are queued up to this size whatever the target is.
-constexpr qint64 s_minFull = 4 * 1024 * 1024;
+constexpr qint64 s_minFull = static_cast<const qint64>(4 * 1024 * 1024);
 // ...and never more than this.
-constexpr qint64 s_maxFull = 64 * 1024 * 1024;
+constexpr qint64 s_maxFull = static_cast<const qint64>(64 * 1024 * 1024);
 // Byte rate window for streams without PCR.
 constexpr qint64 s_rateWindowMs = 10000;
 constexpr qint64 s_minRateSpanMs = 500;
@@ -102,11 +103,11 @@ void StreamBuffer::append(const QByteArray &data)
 void StreamBuffer::detectFormat()
 {
     // Three packet starts in a row make it MPEG-TS.
-    const qsizetype last = m_pending.size() - 2 * s_packetSize;
+    const qsizetype last = m_pending.size() - (static_cast<qsizetype>(2 * s_packetSize));
 
     for (qsizetype i = 0; i < last && i < s_maxSyncSearch; ++i) {
         if (m_pending.at(i) == s_sync && m_pending.at(i + s_packetSize) == s_sync
-            && m_pending.at(i + 2 * s_packetSize) == s_sync) {
+            && m_pending.at(i + (static_cast<qsizetype>(2 * s_packetSize))) == s_sync) {
             m_format = Format::TransportStream;
 
             return;
@@ -190,8 +191,9 @@ void StreamBuffer::readPcr(const char *packet)
         return;
     }
 
-    const qint64 pcr = (qint64(p[6]) << 25) | (qint64(p[7]) << 17) | (qint64(p[8]) << 9)
-        | (qint64(p[9]) << 1) | (qint64(p[10]) >> 7);
+    const qint64 pcr = (static_cast<qint64>(p[6]) << 25) | (static_cast<qint64>(p[7]) << 17)
+        | (static_cast<qint64>(p[8]) << 9) | (static_cast<qint64>(p[9]) << 1)
+        | (static_cast<qint64>(p[10]) >> 7);
 
     if (m_lastPcr >= 0) {
         const qint64 step = (pcr - m_lastPcr) & s_pcrMask;
@@ -202,7 +204,7 @@ void StreamBuffer::readPcr(const char *packet)
     }
 
     m_lastPcr = pcr;
-    m_marks.push_back({m_appended, m_media});
+    m_marks.push_back({.offset = m_appended, .media = m_media});
 }
 
 QByteArray StreamBuffer::take(qint64 maxBytes)

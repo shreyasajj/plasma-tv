@@ -60,7 +60,7 @@ TvhBackend::TvhBackend(QObject *parent)
     // Guide days or the streaming profile changed.
     connect(AppSettings::instance(), &AppSettings::saved, this, &TvhBackend::refresh);
 
-    SourceSettings *settings = SourceSettings::instance();
+    SourceSettings const *settings = SourceSettings::instance();
     connect(settings, &SourceSettings::saved, this, &TvhBackend::sourceSaved);
     connect(settings, &SourceSettings::removed, this, &TvhBackend::sourceRemoved);
     connect(settings, &SourceSettings::reordered, this, &TvhBackend::sourcesReordered);
@@ -95,7 +95,7 @@ TvhBackend::TvhBackend(QObject *parent)
 
 bool TvhBackend::canRecord() const
 {
-    return std::any_of(m_sources.cbegin(), m_sources.cend(), [](const SourceState &state) {
+    return std::ranges::any_of(m_sources, [](const SourceState &state) {
         return state.source->capabilities().record;
     });
 }
@@ -114,7 +114,7 @@ QVariantList TvhBackend::sourceStatus() const
         list.append(QVariantMap{{QStringLiteral("id"), state.source->id()},
                                 {QStringLiteral("name"), state.source->config().name},
                                 {QStringLiteral("type"), state.source->config().type},
-                                {QStringLiteral("status"), int(state.status)},
+                                {QStringLiteral("status"), static_cast<int>(state.status)},
                                 {QStringLiteral("text"), state.statusText}});
     }
 
@@ -130,7 +130,7 @@ void TvhBackend::createSources()
     m_sources.clear();
 
     for (const SourceConfig &config : SourceSettings::instance()->configs()) {
-        createSource(config, int(m_sources.size()));
+        createSource(config, static_cast<int>(m_sources.size()));
     }
 }
 
@@ -277,7 +277,7 @@ void TvhBackend::sourceSaved(const QString &id)
         }
     }
 
-    if (SourceState *old = state(id)) {
+    if (SourceState const *old = state(id)) {
         delete old->source;
         m_sources.removeIf([id](const SourceState &state) {
             return !state.source || state.source->id() == id;
@@ -327,7 +327,7 @@ void TvhBackend::sourcesReordered()
     QList<SourceState> ordered;
 
     for (const SourceConfig &config : SourceSettings::instance()->configs()) {
-        if (SourceState *found = state(config.id)) {
+        if (SourceState const *found = state(config.id)) {
             ordered.append(*found);
         }
     }
@@ -428,10 +428,9 @@ void TvhBackend::mergeEvents()
 
 void TvhBackend::updateStatus()
 {
-    const bool busy =
-        std::any_of(m_sources.cbegin(), m_sources.cend(), [](const SourceState &state) {
-            return state.busy;
-        });
+    const bool busy = std::ranges::any_of(m_sources, [](const SourceState &state) {
+        return state.busy;
+    });
     setBusy(busy);
 
     if (m_sources.isEmpty()) {
@@ -452,19 +451,17 @@ void TvhBackend::updateStatus()
                        : state.statusText;
     };
 
-    const auto offline =
-        std::find_if(m_sources.cbegin(), m_sources.cend(), [](const SourceState &state) {
-            return state.status == Offline;
-        });
+    const auto offline = std::ranges::find_if(m_sources, [](const SourceState &state) {
+        return state.status == Offline;
+    });
 
     if (count(Online) > 0) {
         // One source failing while others work is still worth a word.
         setStatus(Online, offline != m_sources.cend() ? named(*offline) : tr("Connected"));
     } else if (count(Connecting) > 0) {
-        const auto connecting =
-            std::find_if(m_sources.cbegin(), m_sources.cend(), [](const SourceState &state) {
-                return state.status == Connecting;
-            });
+        const auto connecting = std::ranges::find_if(m_sources, [](const SourceState &state) {
+            return state.status == Connecting;
+        });
         setStatus(Connecting, connecting->statusText);
     } else {
         setStatus(Offline, named(*offline));

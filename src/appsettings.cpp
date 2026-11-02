@@ -34,7 +34,7 @@ AppSettings::AppSettings(QObject *parent)
 {
     // Moves the server of older versions into the sources first, which also updates the
     // last channel's ID.
-    SourceSettings *sources = SourceSettings::instance();
+    SourceSettings const *sources = SourceSettings::instance();
     connect(sources, &SourceSettings::changed, this, &AppSettings::changed);
     connect(sources,
             &SourceSettings::credentialsReadyChanged,
@@ -45,7 +45,7 @@ AppSettings::AppSettings(QObject *parent)
             this,
             &AppSettings::secretStoreStatusChanged);
 
-    QSettings settings;
+    QSettings const settings;
     m_streamProfile =
         settings.value(QStringLiteral("playback/profile"), QStringLiteral("pass")).toString();
 
@@ -64,17 +64,17 @@ AppSettings::AppSettings(QObject *parent)
     m_colorSchemes = ColorSchemes::available();
 }
 
-bool AppSettings::configured() const
+bool AppSettings::configured()
 {
     return SourceSettings::instance()->configured();
 }
 
-bool AppSettings::credentialsReady() const
+bool AppSettings::credentialsReady()
 {
     return SourceSettings::instance()->credentialsReady();
 }
 
-QString AppSettings::secretStoreStatus() const
+QString AppSettings::secretStoreStatus()
 {
     return SourceSettings::instance()->secretStoreStatus();
 }
