@@ -30,10 +30,16 @@ FocusScope {
         Tvh.epgRevision;
         return Tvh.channels.get(channelIndex);
     }
+    // Counts every second while the info bar or the jump bar is shown.
+    property double clockMs: Date.now()
+    // The moment on screen, and the oldest one that can be rewound to.
+    readonly property double playingMs: clockMs - player.behindMs
+    readonly property double oldestMs: player.held ? clockMs - player.windowMs() : clockMs
+    // The programme being watched, which is an earlier one after rewinding past its start.
     readonly property var nowEvent: {
         Tvh.now;
         Tvh.epgRevision;
-        return Tvh.eventAt(shownUuid, Date.now());
+        return Tvh.eventAt(shownUuid, pendingUuid.length > 0 ? clockMs : playingMs);
     }
     readonly property var nextEvent: {
         Tvh.now;
@@ -102,6 +108,14 @@ FocusScope {
         jumpTargetMs = Math.max(0, Math.min(oldest, from - deltaMs));
         jumpTimer.restart();
         jumpBar.show();
+    }
+
+    // "−2:30 behind live · 6:10 kept", or "6:10 kept" while live; empty with nothing kept.
+    function keptText(behindMs) {
+        if (!player.held)
+            return "";
+        const kept = qsTr("%1 kept").arg(formatBehind(clockMs - oldestMs));
+        return behindMs > 0 ? qsTr("−%1 behind live").arg(formatBehind(behindMs)) + "  ·  " + kept : kept;
     }
 
     function flash(text) {
@@ -228,6 +242,13 @@ FocusScope {
         id: infoTimer
         interval: 6000
         onTriggered: root.infoShown = false
+    }
+    Timer {
+        interval: 1000
+        repeat: true
+        triggeredOnStart: true
+        running: root.visible && (root.infoShown || jumpBar.visible)
+        onTriggered: root.clockMs = Date.now()
     }
     Timer {
         id: jumpTimer
@@ -376,26 +397,30 @@ FocusScope {
             onTriggered: jumpBar.visible = false
         }
 
-        BigscreenUI.ProgressBar {
-            id: jumpProgress
+        // Behind live where the presses lead to, while they are added up.
+        readonly property double shownBehindMs: jumpTimer.running ? root.jumpTargetMs : root.player.behindMs
+        readonly property var event: {
+            Tvh.epgRevision;
+            return Tvh.eventAt(root.player.channelUuid, root.clockMs - shownBehindMs);
+        }
+
+        ProgrammeBar {
             anchors.left: parent.left
             anchors.right: jumpText.left
             anchors.margins: 27
             anchors.verticalCenter: parent.verticalCenter
-            // Live is on the right; the oldest kept moment on the left.
-            value: {
-                const shown = jumpTimer.running ? root.jumpTargetMs : root.player.behindMs;
-                const window = Math.max(1, root.player.windowMs());
-                return 1 - Math.min(shown, window) / window;
-            }
+            startMs: jumpBar.event.start ?? 0
+            stopMs: jumpBar.event.stop ?? 0
+            playingMs: root.clockMs - jumpBar.shownBehindMs
+            liveMs: root.clockMs
+            oldestMs: root.oldestMs
         }
         Text {
             id: jumpText
             anchors.right: parent.right
             anchors.rightMargin: 27
             anchors.verticalCenter: parent.verticalCenter
-            readonly property double shown: jumpTimer.running ? root.jumpTargetMs : root.player.behindMs
-            text: shown > 0 ? "−" + root.formatBehind(shown) : qsTr("Live")
+            text: jumpBar.shownBehindMs > 0 ? root.keptText(jumpBar.shownBehindMs) : qsTr("Live") + "  ·  " + root.keptText(0)
             color: Kirigami.Theme.textColor
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -506,7 +531,8 @@ FocusScope {
             Row {
                 spacing: 16
                 width: parent.width
-                visible: root.nowEvent.start !== undefined
+                // Without guide data it still shows what is kept.
+                visible: root.nowEvent.start !== undefined || root.player.held
                 Text {
                     id: rangeText
                     anchors.verticalCenter: parent.verticalCenter
@@ -514,18 +540,30 @@ FocusScope {
                     color: "#d0d6df"
                     font.pixelSize: Theme.fontSmall
                 }
-                BigscreenUI.ProgressBar {
+                ProgrammeBar {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - rangeText.width - leftText.width - 32
-                    value: root.nowEvent.start !== undefined ? (Tvh.now - root.nowEvent.start) / (root.nowEvent.stop - root.nowEvent.start) : 0
+                    startMs: root.nowEvent.start ?? 0
+                    stopMs: root.nowEvent.stop ?? 0
+                    // While zapping, the other channel's programme as it is now.
+                    playingMs: root.pendingUuid.length > 0 ? root.clockMs : root.playingMs
+                    liveMs: root.clockMs
+                    oldestMs: root.pendingUuid.length > 0 ? root.clockMs : root.oldestMs
                 }
                 Text {
                     id: leftText
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.nowEvent.stop !== undefined ? qsTr("%1 min left").arg(Theme.minutesLeft(root.nowEvent.stop, Tvh.now)) : ""
+                    text: root.nowEvent.stop !== undefined ? qsTr("%1 min left").arg(Theme.minutesLeft(root.nowEvent.stop, root.pendingUuid.length > 0 ? root.clockMs : root.playingMs)) : ""
                     color: "#d0d6df"
                     font.pixelSize: Theme.fontSmall
                 }
+            }
+            Text {
+                width: parent.width
+                visible: text.length > 0
+                text: root.pendingUuid.length > 0 ? "" : root.keptText(root.player.behindMs)
+                color: "#d0d6df"
+                font.pixelSize: Theme.fontSmall
             }
             Text {
                 width: parent.width
