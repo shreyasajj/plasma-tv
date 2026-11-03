@@ -42,8 +42,8 @@ int TimeshiftBuffer::normalizeMinFreeGb(int gigabytes)
     return nearest(gigabytes, {1, 2, 5, 10});
 }
 
-TimeshiftBuffer::TimeshiftBuffer(const QString &directory, Options options)
-    : m_directory(directory)
+TimeshiftBuffer::TimeshiftBuffer(QString directory, Options options)
+    : m_directory(std::move(directory))
     , m_options(std::move(options))
 {
     if (!m_options.freeBytes) {
