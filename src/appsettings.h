@@ -39,6 +39,8 @@ class AppSettings : public QObject
     Q_PROPERTY(int guideDays READ guideDays NOTIFY changed)
     // Seconds behind live: -1 = Auto (grows after stalls), 0 = Off, 2, 5 or 10.
     Q_PROPERTY(int playbackBuffer READ playbackBuffer NOTIFY changed)
+    Q_PROPERTY(int rewindMinutes READ rewindMinutes NOTIFY changed)
+    Q_PROPERTY(int minFreeGb READ minFreeGb NOTIFY changed)
     Q_PROPERTY(bool stopInBackground READ stopInBackground NOTIFY changed)
     Q_PROPERTY(bool confirmQuit READ confirmQuit NOTIFY changed)
     Q_PROPERTY(bool configured READ configured NOTIFY changed)
@@ -100,6 +102,18 @@ public:
     [[nodiscard]] int playbackBuffer() const
     {
         return m_playbackBuffer;
+    }
+
+    // Length of the rewind window; 0 is off.
+    [[nodiscard]] int rewindMinutes() const
+    {
+        return m_rewindMinutes;
+    }
+
+    // Rewinding and pausing stop writing to disk below this much free space.
+    [[nodiscard]] int minFreeGb() const
+    {
+        return m_minFreeGb;
     }
 
     [[nodiscard]] int guideDays() const
@@ -164,7 +178,8 @@ public:
     }
 
     // Expected keys: backend, host, port, useHttps, playlistUrl, xmltvUrl, username, streamProfile,
-    // guideDays, playbackBuffer, stopInBackground, confirmQuit, colorScheme and, only when the
+    // guideDays, playbackBuffer, rewindMinutes, minFreeGb, stopInBackground, confirmQuit,
+    // colorScheme and, only when the
     // password was edited, password.
     Q_INVOKABLE void save(const QVariantMap &values);
 
@@ -186,6 +201,8 @@ private:
     QString m_streamProfile;
     int m_guideDays = 3;
     int m_playbackBuffer = -1;
+    int m_rewindMinutes = 0;
+    int m_minFreeGb = 1;
     bool m_stopInBackground = true;
     bool m_confirmQuit = true;
     QString m_lastChannel;

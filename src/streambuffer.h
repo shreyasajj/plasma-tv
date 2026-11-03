@@ -34,8 +34,21 @@ public:
     // The player waited this long for data: grow the target (Auto) and refill.
     static constexpr qint64 s_stallMs = 1000;
 
+    // Gets each aligned MPEG-TS packet with its media time in milliseconds.
+    using PacketSink = std::function<void(const char *data, qint64 size, qint64 mediaMs)>;
+
     // 'clock' returns milliseconds; tests pass their own.
     explicit StreamBuffer(int mode, std::function<qint64()> clock = {});
+
+    // Called for every packet appended from now on; empty to stop.
+    void setPacketSink(PacketSink sink)
+    {
+        m_sink = std::move(sink);
+    }
+    // Hands the queued packets, those the player didn't take yet, to 'sink'.
+    void replayQueued(const PacketSink &sink) const;
+    // Drops the oldest queued data down to 'maxBytes', on a packet boundary.
+    void keepNewest(qint64 maxBytes);
 
     void append(const QByteArray &data);
     // Up to 'maxBytes' for the player. Empty while filling up or when nothing is queued.
@@ -67,6 +80,10 @@ public:
     {
         return m_format == Format::TransportStream;
     }
+    [[nodiscard]] bool formatKnown() const
+    {
+        return m_format != Format::Unknown;
+    }
 
 private:
     enum class Format : std::uint8_t {
@@ -86,6 +103,8 @@ private:
     void readPcr(const char *packet);
     void stalled();
     [[nodiscard]] qint64 rateBytesPerSecond() const;
+    [[nodiscard]] qint64 mediaMsAt(qint64 offset) const;
+    void dropMarksBefore(qint64 offset);
 
     std::function<qint64()> m_clock;
     QElapsedTimer m_timer;
@@ -108,6 +127,7 @@ private:
     qint64 m_lastPcr = -1;
     qint64 m_media = 0;
     std::deque<Mark> m_marks;
+    PacketSink m_sink;
 
     // Byte rate for streams without PCR: (time, total appended) samples.
     std::deque<std::pair<qint64, qint64>> m_samples;

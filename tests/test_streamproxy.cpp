@@ -4,9 +4,11 @@
 
 #include "streamproxy.h"
 
+#include <QDir>
 #include <QPointer>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QTemporaryDir>
 #include <QTest>
 
 #include <functional>
@@ -24,6 +26,47 @@ QByteArray packet(char fill)
     p[3] = 0x10;
 
     return p;
+}
+
+// A packet with a PCR for 'ms', then four without: what a live channel sends in 100 ms.
+QByteArray pcrPackets(qint64 ms)
+{
+    QByteArray p = packet('p');
+    const qint64 pcr = ms * 90;
+    p[3] = 0x30; // adaptation field and payload
+    p[4] = 7;
+    p[5] = 0x10; // PCR flag
+    p[6] = char(pcr >> 25);
+    p[7] = char(pcr >> 17);
+    p[8] = char(pcr >> 9);
+    p[9] = char(pcr >> 1);
+    p[10] = char(((pcr & 1) << 7) | 0x7e);
+
+    QByteArray data = p;
+
+    for (int i = 0; i < 4; ++i) {
+        data += packet(char('a' + (ms / 100) % 26));
+    }
+
+    return data;
+}
+
+// A live channel from 'fromMs' to 'toMs'.
+QByteArray channel(qint64 fromMs, qint64 toMs)
+{
+    QByteArray data;
+
+    for (qint64 ms = fromMs; ms <= toMs; ms += 100) {
+        data += pcrPackets(ms);
+    }
+
+    return data;
+}
+
+// Bytes of channel() from 'fromMs' up to 'ms'.
+qsizetype offsetOf(qint64 fromMs, qint64 ms)
+{
+    return qsizetype((ms - fromMs) / 100 * 5 * s_packetSize);
 }
 
 QByteArray packets(int count, char fill = 'a')
@@ -93,7 +136,8 @@ struct Player {
     {
         m_socket.connectToHost(url.host(), quint16(url.port()));
         QObject::connect(&m_socket, &QTcpSocket::connected, &m_socket, [this, url]() {
-            m_socket.write("GET " + url.path().toLatin1() + " HTTP/1.1\r\nHost: x\r\n\r\n");
+            m_socket.write("GET " + url.toEncoded(QUrl::RemoveScheme | QUrl::RemoveAuthority)
+                           + " HTTP/1.1\r\nHost: x\r\n\r\n");
         });
         QObject::connect(&m_socket, &QTcpSocket::readyRead, &m_socket, [this]() {
             response += m_socket.readAll();
@@ -120,6 +164,11 @@ struct Player {
         return end < 0 ? QByteArray() : response.mid(end + 4);
     }
 
+    void close()
+    {
+        m_socket.disconnectFromHost();
+    }
+
     QByteArray head() const
     {
         return response.left(response.indexOf("\r\n\r\n"));
@@ -137,11 +186,38 @@ void ok(QTcpSocket *socket, const QByteArray &type = "video/mp2t", qint64 length
         + "\r\nConnection: close\r\n\r\n");
 }
 
+// Rewinding into a temporary folder, one chunk file per second.
+StreamProxy::TimeshiftOptions timeshiftIn(const QTemporaryDir &root)
+{
+    StreamProxy::TimeshiftOptions options;
+    options.root = root.path();
+    options.chunkMs = 1000;
+    options.freeBytes = [](const QString &) {
+        return qint64(1) << 40;
+    };
+
+    return options;
+}
+
+int sessionFolders(const QTemporaryDir &root)
+{
+    return int(QDir(root.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size());
+}
+
 StreamProxy::Timing fast()
 {
     StreamProxy::Timing timing;
     timing.stallMs = 400;
     timing.retryDelaysMs = {20, 20, 20};
+
+    return timing;
+}
+
+// A server that only sends once isn't taken for a broken connection.
+StreamProxy::Timing patient()
+{
+    StreamProxy::Timing timing = fast();
+    timing.stallMs = 60000;
 
     return timing;
 }
@@ -446,6 +522,172 @@ private Q_SLOTS:
         held->disconnectFromHost();
         QVERIFY(player.waitClosed());
         QCOMPARE(player.body(), data);
+    }
+
+    void rewindKeepsTheSessionAfterThePlayerLeaves()
+    {
+        const QByteArray data = channel(0, 5000);
+        FakeServer server([&](QTcpSocket *socket, const QByteArray &, int) {
+            // Live: the connection stays open.
+            ok(socket);
+            socket->write(data);
+        });
+        QTemporaryDir root;
+        StreamProxy proxy;
+        proxy.setTiming(patient());
+        proxy.setTimeshiftOptions(timeshiftIn(root));
+        const QUrl url = proxy.relay(server.url(), {}, {}, 0);
+        proxy.setRewind(url, 60000);
+
+        auto live = std::make_unique<Player>(url);
+        QVERIFY(QTest::qWaitFor([&]() {
+            return proxy.timeshift(url).windowMs >= 5000;
+        }));
+        QVERIFY(proxy.timeshift(url).known);
+        QVERIFY(proxy.timeshift(url).available);
+        live->close();
+        QVERIFY(live->waitClosed());
+        live.reset();
+        QTest::qWait(100);
+
+        // 3 s behind 5000 ms is 2000 ms, which has a mark of its own.
+        Player behind(StreamProxy::behind(url, 3000));
+        const QByteArray expected = data.mid(offsetOf(0, 2000));
+        QVERIFY(QTest::qWaitFor([&]() {
+            return behind.body().size() >= expected.size();
+        }));
+        QCOMPARE(behind.body(), expected);
+        QVERIFY(behind.head().contains("video/mp2t"));
+        // Still the first connection to the server.
+        QCOMPARE(server.requests().size(), 1);
+        QCOMPARE(sessionFolders(root), 1);
+
+        proxy.end(url);
+        QVERIFY(behind.waitClosed());
+        QCOMPARE(sessionFolders(root), 0);
+    }
+
+    void holdKeepsTheStreamFromAPause()
+    {
+        const QByteArray first = channel(0, 2000);
+        const QByteArray second = channel(2100, 5000);
+        QPointer<QTcpSocket> upstream;
+        FakeServer server([&](QTcpSocket *socket, const QByteArray &, int) {
+            ok(socket);
+            socket->write(first);
+            upstream = socket;
+        });
+        QTemporaryDir root;
+        StreamProxy proxy;
+        proxy.setTiming(patient());
+        proxy.setTimeshiftOptions(timeshiftIn(root));
+        const QUrl url = proxy.relay(server.url(), {}, {}, 0);
+
+        Player live(url);
+        QVERIFY(QTest::qWaitFor([&]() {
+            return live.body().size() >= first.size();
+        }));
+        // Without rewinding nothing is kept until the pause.
+        QVERIFY(!proxy.timeshift(url).available);
+        QCOMPARE(sessionFolders(root), 0);
+
+        QVERIFY(proxy.hold(url));
+        upstream->write(second);
+        QVERIFY(QTest::qWaitFor([&]() {
+            return proxy.timeshift(url).windowMs >= 2900;
+        }));
+
+        // 1 s behind 5000 ms: the mark before 4000 ms is the one at 3100 ms.
+        Player behind(StreamProxy::behind(url, 1000));
+        const QByteArray expected = second.mid(offsetOf(2100, 3100));
+        QVERIFY(QTest::qWaitFor([&]() {
+            return behind.body().size() >= expected.size();
+        }));
+        QCOMPARE(behind.body(), expected);
+    }
+
+    void holdNeedsATransportStream()
+    {
+        FakeServer server([&](QTcpSocket *socket, const QByteArray &, int) {
+            ok(socket, "video/x-matroska");
+            socket->write(QByteArray(20000, 'm'));
+        });
+        QTemporaryDir root;
+        StreamProxy proxy;
+        proxy.setTiming(patient());
+        proxy.setTimeshiftOptions(timeshiftIn(root));
+        const QUrl url = proxy.relay(server.url(), {}, {}, 0);
+        proxy.setRewind(url, 60000);
+
+        Player live(url);
+        QVERIFY(QTest::qWaitFor([&]() {
+            return live.body().size() >= 20000;
+        }));
+        QVERIFY(proxy.timeshift(url).known);
+        QVERIFY(!proxy.timeshift(url).available);
+        QVERIFY(!proxy.hold(url));
+        QCOMPARE(sessionFolders(root), 0);
+    }
+
+    void playerBehindLiveFinishesWhenTheStreamEnds()
+    {
+        const QByteArray data = channel(0, 3000);
+        FakeServer server([&](QTcpSocket *socket, const QByteArray &, int number) {
+            if (number > 0) {
+                // The channel is gone for good.
+                socket->write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+                socket->disconnectFromHost();
+
+                return;
+            }
+
+            ok(socket);
+            socket->write(data);
+        });
+        QTemporaryDir root;
+        StreamProxy proxy;
+        proxy.setTiming(fast());
+        proxy.setTimeshiftOptions(timeshiftIn(root));
+        const QUrl url = proxy.relay(server.url(), {}, {}, 0);
+        proxy.setRewind(url, 60000);
+
+        Player live(url);
+        QVERIFY(QTest::qWaitFor([&]() {
+            return proxy.timeshift(url).windowMs >= 3000;
+        }));
+
+        Player behind(StreamProxy::behind(url, 2000));
+        // The server stalls, the relay gives up, and the live player is closed.
+        QVERIFY(live.waitClosed());
+        // The player behind live still gets everything up to the end, then the connection closes.
+        QVERIFY(behind.waitClosed());
+        QCOMPARE(behind.body(), data.mid(offsetOf(0, 1000)));
+    }
+
+    void sessionWithoutRewindEndsWithThePlayer()
+    {
+        FakeServer server([&](QTcpSocket *socket, const QByteArray &, int) {
+            ok(socket);
+            socket->write(channel(0, 1000));
+        });
+        StreamProxy proxy;
+        proxy.setTiming(patient());
+        const QUrl url = proxy.relay(server.url(), {}, {}, 0);
+
+        {
+            Player live(url);
+            QVERIFY(QTest::qWaitFor([&]() {
+                return live.body().size() > 0;
+            }));
+            live.close();
+            QVERIFY(live.waitClosed());
+        }
+
+        // A new connection to the same address starts over at the server.
+        Player again(url);
+        QVERIFY(QTest::qWaitFor([&]() {
+            return server.requests().size() == 2;
+        }));
     }
 };
 

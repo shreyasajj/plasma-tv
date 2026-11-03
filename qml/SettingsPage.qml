@@ -29,6 +29,12 @@ FocusScope {
     // -1 = Auto, 0 = Off, else seconds
     property int dBuffer: -1
     readonly property var bufferModes: [-1, 0, 2, 5, 10]
+    property int dRewind: 0
+    readonly property var rewindChoices: [0, 15, 30, 60, 120]
+    readonly property int rewindIndex: Math.max(0, rewindChoices.indexOf(dRewind))
+    property int dMinFree: 1
+    readonly property var minFreeChoices: [1, 2, 5, 10]
+    readonly property int minFreeIndex: Math.max(0, minFreeChoices.indexOf(dMinFree))
     property bool dStopInBackground: true
     property bool dConfirmQuit: true
     property string dScheme
@@ -39,7 +45,7 @@ FocusScope {
     property bool testing: false
     readonly property bool hasSource: m3u ? dPlaylist.length > 0 : dHost.length > 0
 
-    readonly property bool dirty: dBackend !== Settings.backend || dPlaylist !== Settings.playlistUrl || dXmltv !== Settings.xmltvUrl || dHost !== Settings.host || dPort !== Settings.port || dHttps !== Settings.useHttps || dUser !== Settings.username || dPassword !== null || dProfile !== Settings.streamProfile || dDays !== Settings.guideDays || dBuffer !== Settings.playbackBuffer || dStopInBackground !== Settings.stopInBackground || dConfirmQuit !== Settings.confirmQuit || dScheme !== Settings.colorScheme
+    readonly property bool dirty: dBackend !== Settings.backend || dPlaylist !== Settings.playlistUrl || dXmltv !== Settings.xmltvUrl || dHost !== Settings.host || dPort !== Settings.port || dHttps !== Settings.useHttps || dUser !== Settings.username || dPassword !== null || dProfile !== Settings.streamProfile || dDays !== Settings.guideDays || dBuffer !== Settings.playbackBuffer || dRewind !== Settings.rewindMinutes || dMinFree !== Settings.minFreeGb || dStopInBackground !== Settings.stopInBackground || dConfirmQuit !== Settings.confirmQuit || dScheme !== Settings.colorScheme
 
     function load() {
         dBackend = Settings.backend;
@@ -53,6 +59,8 @@ FocusScope {
         dProfile = Settings.streamProfile;
         dDays = Settings.guideDays;
         dBuffer = Settings.playbackBuffer;
+        dRewind = Settings.rewindMinutes;
+        dMinFree = Settings.minFreeGb;
         dStopInBackground = Settings.stopInBackground;
         dConfirmQuit = Settings.confirmQuit;
         dScheme = Settings.colorScheme;
@@ -76,6 +84,8 @@ FocusScope {
             streamProfile: dProfile,
             guideDays: dDays,
             playbackBuffer: dBuffer,
+            rewindMinutes: dRewind,
+            minFreeGb: dMinFree,
             stopInBackground: dStopInBackground,
             confirmQuit: dConfirmQuit,
             colorScheme: dScheme
@@ -339,6 +349,62 @@ FocusScope {
                     Keys.onLeftPressed: root.dBuffer = root.bufferModes[Math.max(0, root.bufferIndex - 1)]
                     Keys.onRightPressed: root.dBuffer = root.bufferModes[Math.min(root.bufferModes.length - 1, root.bufferIndex + 1)]
                     KeyNavigation.up: profileRow
+                    KeyNavigation.down: rewindRow
+                    KeyNavigation.right: testButton
+                }
+                BigscreenUI.ButtonDelegate {
+                    id: rewindRow
+                    width: parent.width
+                    text: qsTr("Rewind live TV")
+                    // About 8 Mbit/s: 1 MB per second.
+                    description: root.dRewind === 0 ? qsTr("Off") : qsTr("Last %1 minutes, uses up to about %2 GB").arg(root.dRewind).arg((root.dRewind * 60 / 1000).toFixed(1))
+                    trailing: Row {
+                        spacing: 5
+                        Kirigami.Icon {
+                            source: "go-previous"
+                            implicitWidth: Kirigami.Units.iconSizes.small
+                            implicitHeight: Kirigami.Units.iconSizes.small
+                            opacity: root.rewindIndex > 0 ? 1 : 0.3
+                        }
+                        Kirigami.Icon {
+                            source: "go-next"
+                            implicitWidth: Kirigami.Units.iconSizes.small
+                            implicitHeight: Kirigami.Units.iconSizes.small
+                            opacity: root.rewindIndex < root.rewindChoices.length - 1 ? 1 : 0.3
+                        }
+                    }
+                    onClicked: root.dRewind = root.rewindChoices[(root.rewindIndex + 1) % root.rewindChoices.length]
+                    Keys.onLeftPressed: root.dRewind = root.rewindChoices[Math.max(0, root.rewindIndex - 1)]
+                    Keys.onRightPressed: root.dRewind = root.rewindChoices[Math.min(root.rewindChoices.length - 1, root.rewindIndex + 1)]
+                    KeyNavigation.up: bufferRow
+                    KeyNavigation.down: root.dRewind > 0 ? minFreeRow : backgroundRow
+                    KeyNavigation.right: testButton
+                }
+                BigscreenUI.ButtonDelegate {
+                    id: minFreeRow
+                    width: parent.width
+                    visible: root.dRewind > 0
+                    text: qsTr("Keep free disk space")
+                    description: qsTr("Rewinding and pausing stop below %1 GB free").arg(root.dMinFree)
+                    trailing: Row {
+                        spacing: 5
+                        Kirigami.Icon {
+                            source: "go-previous"
+                            implicitWidth: Kirigami.Units.iconSizes.small
+                            implicitHeight: Kirigami.Units.iconSizes.small
+                            opacity: root.minFreeIndex > 0 ? 1 : 0.3
+                        }
+                        Kirigami.Icon {
+                            source: "go-next"
+                            implicitWidth: Kirigami.Units.iconSizes.small
+                            implicitHeight: Kirigami.Units.iconSizes.small
+                            opacity: root.minFreeIndex < root.minFreeChoices.length - 1 ? 1 : 0.3
+                        }
+                    }
+                    onClicked: root.dMinFree = root.minFreeChoices[(root.minFreeIndex + 1) % root.minFreeChoices.length]
+                    Keys.onLeftPressed: root.dMinFree = root.minFreeChoices[Math.max(0, root.minFreeIndex - 1)]
+                    Keys.onRightPressed: root.dMinFree = root.minFreeChoices[Math.min(root.minFreeChoices.length - 1, root.minFreeIndex + 1)]
+                    KeyNavigation.up: rewindRow
                     KeyNavigation.down: backgroundRow
                     KeyNavigation.right: testButton
                 }
@@ -353,7 +419,7 @@ FocusScope {
                         checked = Qt.binding(() => root.dStopInBackground);
                     }
 
-                    KeyNavigation.up: bufferRow
+                    KeyNavigation.up: root.dRewind > 0 ? minFreeRow : rewindRow
                     KeyNavigation.down: confirmQuitRow
                     KeyNavigation.right: testButton
                 }

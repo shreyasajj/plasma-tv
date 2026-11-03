@@ -8,11 +8,14 @@
 #include "channelmodel.h"
 #include "m3u.h"
 #include "streamproxy.h"
+#include "timeshiftbuffer.h"
 #include "tvhapi.h"
 
+#include <QDir>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QQmlEngine>
+#include <QStandardPaths>
 #include <QThread>
 
 #include <algorithm>
@@ -25,6 +28,24 @@ constexpr int s_maxEpgEvents = 200000;
 constexpr int s_tickMs = 15 * 1000;
 constexpr int s_epgRefreshMs = 30 * 60 * 1000;
 constexpr int s_retryMs = 60 * 1000;
+constexpr qint64 s_bytesPerGb = static_cast<qint64>(1024) * 1024 * 1024;
+
+QString timeshiftRoot()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+        + QStringLiteral("/timeshift");
+}
+
+// Pauses of older versions were kept in ~/Videos/TV recordings.
+void removeOldPauseFiles()
+{
+    QDir dir(QStandardPaths::writableLocation(QStandardPaths::MoviesLocation)
+             + QStringLiteral("/TV recordings"));
+
+    for (const QString &file : dir.entryList({QStringLiteral("Paused - *.ts")}, QDir::Files)) {
+        dir.remove(file);
+    }
+}
 
 ServerConfig configFromValues(const QVariantMap &values, const ServerConfig &fallback)
 {
@@ -92,6 +113,34 @@ TvhBackend::TvhBackend(QObject *parent)
     , m_streamProxy(new StreamProxy(this))
 {
     m_database.open();
+
+    // Left over from a crash: rewinding never survives a restart.
+    TimeshiftBuffer::removeAll(timeshiftRoot());
+    removeOldPauseFiles();
+
+    const auto applyTimeshiftOptions = [this]() {
+        StreamProxy::TimeshiftOptions options;
+        options.root = timeshiftRoot();
+        options.minFreeBytes = AppSettings::instance()->minFreeGb() * s_bytesPerGb;
+        m_streamProxy->setTimeshiftOptions(options);
+    };
+    applyTimeshiftOptions();
+    connect(AppSettings::instance(), &AppSettings::changed, this, applyTimeshiftOptions);
+
+    connect(m_streamProxy, &StreamProxy::timeshiftChanged, this, [this](const QUrl &relayUrl) {
+        if (relayUrl != m_playingRelay) {
+            return;
+        }
+
+        const bool stopped = m_streamProxy->timeshift(relayUrl).stopped;
+
+        if (stopped && !m_rewindStopped) {
+            Q_EMIT notification(tr("Rewinding stopped: the disk is nearly full"));
+        }
+
+        m_rewindStopped = stopped;
+        Q_EMIT rewindChanged();
+    });
 
     m_tickTimer.setInterval(s_tickMs);
     connect(&m_tickTimer, &QTimer::timeout, this, [this] {
@@ -609,6 +658,9 @@ void TvhBackend::requestStream(const QString &uuid)
         return;
     }
 
+    // The previous channel's stream and what was kept of it end here.
+    stopStream();
+
     // HLS is fetched segment by segment by the player, which already buffers it.
     if (StreamProxy::isHls(direct) && direct.userName().isEmpty()) {
         Q_EMIT streamReady(uuid, direct);
@@ -630,7 +682,46 @@ void TvhBackend::requestStream(const QString &uuid)
         return;
     }
 
+    m_streamProxy->setRewind(url,
+                             static_cast<qint64>(AppSettings::instance()->rewindMinutes()) * 60
+                                 * 1000);
+    m_playingRelay = url;
     Q_EMIT streamReady(uuid, url);
+}
+
+bool TvhBackend::rewindAvailable() const
+{
+    return m_streamProxy->timeshift(m_playingRelay).available;
+}
+
+double TvhBackend::rewindWindowMs() const
+{
+    return static_cast<double>(m_streamProxy->timeshift(m_playingRelay).windowMs);
+}
+
+bool TvhBackend::holdStream()
+{
+    const bool held = m_streamProxy->hold(m_playingRelay);
+    Q_EMIT rewindChanged();
+
+    return held;
+}
+
+QUrl TvhBackend::timeshiftUrl(double behindMs) const
+{
+    return StreamProxy::behind(m_playingRelay, static_cast<qint64>(behindMs));
+}
+
+void TvhBackend::stopStream()
+{
+    if (m_playingRelay.isEmpty()) {
+        return;
+    }
+
+    m_streamProxy->end(m_playingRelay);
+    m_playingRelay.clear();
+    m_rewindStopped = false;
+    Q_EMIT rewindChanged();
 }
 
 void TvhBackend::record(double eventId)

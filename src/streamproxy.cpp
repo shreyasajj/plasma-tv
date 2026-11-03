@@ -6,6 +6,7 @@
 
 #include "networkauth.h"
 #include "streambuffer.h"
+#include "timeshiftbuffer.h"
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -15,6 +16,9 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
+#include <QUrlQuery>
+
+#include <memory>
 #include <utility>
 
 namespace
@@ -47,33 +51,207 @@ bool isHlsType(const QByteArray &contentType)
     return contentType.toLower().contains("mpegurl");
 }
 
-// One player connection: fetches the stream, buffers it and reconnects to the server.
-class Session : public QObject
+// Queued for a live player while rewinding; the rest is on disk anyway.
+constexpr qint64 s_maxLiveQueue = static_cast<const qint64>(32 * 1024 * 1024);
+
+struct Reader {
+    QPointer<QTcpSocket> socket;
+    // Plays from the rewind files instead of the live buffer.
+    bool fromFile = false;
+    qint64 position = 0;
+    bool headerSent = false;
+};
+}
+
+// One stream: fetches it, buffers it, reconnects to the server and, when rewinding,
+// writes it to disk. Players attach to it as readers: one live, any number from the files.
+class StreamSession : public QObject
 {
 public:
-    Session(QTcpSocket *socket,
-            const StreamProxy::Target &target,
-            StreamProxy::Timing timing,
-            QNetworkAccessManager *networkManager)
-        : QObject(socket)
-        , m_socket(socket)
+    StreamSession(const StreamProxy::Target &target,
+                  StreamProxy::Timing timing,
+                  QNetworkAccessManager *networkManager,
+                  StreamProxy::TimeshiftOptions options,
+                  QString directory,
+                  std::function<void()> changed,
+                  QObject *parent)
+        : QObject(parent)
         , m_target(target)
         , m_timing(std::move(timing))
         , m_networkManager(networkManager)
+        , m_options(std::move(options))
+        , m_directory(std::move(directory))
+        , m_changed(std::move(changed))
         , m_buffer(target.bufferMode)
     {
         m_stallTimer.setSingleShot(true);
         m_retryTimer.setSingleShot(true);
-        connect(&m_stallTimer, &QTimer::timeout, this, &Session::checkStall);
-        connect(&m_retryTimer, &QTimer::timeout, this, &Session::request);
-        connect(socket, &QTcpSocket::bytesWritten, this, &Session::pump);
-        // The player stopped (channel change): stop downloading as well.
-        connect(socket, &QTcpSocket::disconnected, this, &Session::dropReply);
+        connect(&m_stallTimer, &QTimer::timeout, this, &StreamSession::checkStall);
+        connect(&m_retryTimer, &QTimer::timeout, this, &StreamSession::request);
+
+        if (m_target.rewindMs > 0 && !m_directory.isEmpty()) {
+            const qint64 maxMs = m_target.rewindMs;
+            m_buffer.setPacketSink([this, maxMs](const char *data, qint64 size, qint64 mediaMs) {
+                if (!m_timeshift) {
+                    startTimeshift(maxMs);
+                }
+
+                writeTimeshift(data, size, mediaMs);
+            });
+        }
 
         request();
     }
 
+    ~StreamSession() override
+    {
+        dropReply();
+
+        for (const Reader &reader : std::as_const(m_readers)) {
+            if (reader.socket) {
+                reader.socket->disconnect(this);
+                reader.socket->disconnectFromHost();
+            }
+        }
+    }
+
+    StreamSession(const StreamSession &) = delete;
+    StreamSession &operator=(const StreamSession &) = delete;
+
+    void attach(QTcpSocket *socket, qint64 behindMs)
+    {
+        Reader reader{.socket = socket};
+
+        if (behindMs > 0 && m_timeshift
+            && m_timeshift->endPosition() > m_timeshift->oldestPosition()) {
+            reader.fromFile = true;
+            reader.position = m_timeshift->positionAt(m_timeshift->newestMs() - behindMs);
+        } else if (m_upstreamDone) {
+            respond(socket, "502 Bad Gateway");
+
+            return;
+        } else {
+            // One live player at a time: a new connection takes over the buffer.
+            for (const Reader &old : std::as_const(m_readers)) {
+                if (!old.fromFile && old.socket) {
+                    old.socket->disconnect(this);
+                    old.socket->disconnectFromHost();
+                }
+            }
+
+            m_readers.removeIf([](const Reader &old) {
+                return !old.fromFile;
+            });
+        }
+
+        connect(socket, &QTcpSocket::bytesWritten, this, &StreamSession::pump);
+        connect(socket, &QTcpSocket::disconnected, this, [this, socket]() {
+            detach(socket);
+        });
+        m_readers.append(reader);
+
+        if (m_typeKnown) {
+            sendHeaders();
+        }
+
+        pump();
+    }
+
+    // Keeps everything from now on, including what the live player didn't get yet.
+    bool hold()
+    {
+        if (m_timeshift) {
+            return true;
+        }
+
+        if (!m_buffer.isTransportStream() || m_upstreamDone || m_directory.isEmpty()) {
+            return false;
+        }
+
+        startTimeshift(0);
+        const StreamBuffer::PacketSink sink =
+            [this](const char *data, qint64 size, qint64 mediaMs) {
+                writeTimeshift(data, size, mediaMs);
+            };
+        m_buffer.replayQueued(sink);
+        m_buffer.setPacketSink(sink);
+
+        return true;
+    }
+
+    [[nodiscard]] StreamProxy::TimeshiftState state() const
+    {
+        StreamProxy::TimeshiftState state;
+        state.known = m_buffer.formatKnown();
+
+        if (m_timeshift) {
+            state.available = m_timeshift->endPosition() > m_timeshift->oldestPosition();
+            state.stopped = m_timeshift->stopped();
+            state.windowMs = m_timeshift->windowMs();
+        }
+
+        return state;
+    }
+
 private:
+    void startTimeshift(qint64 maxMs)
+    {
+        TimeshiftBuffer::Options options;
+        options.maxMs = maxMs;
+        options.minFreeBytes = m_options.minFreeBytes;
+        options.chunkMs = m_options.chunkMs;
+        options.freeBytes = m_options.freeBytes;
+        m_timeshift = std::make_unique<TimeshiftBuffer>(m_directory, options);
+    }
+
+    void writeTimeshift(const char *data, qint64 size, qint64 mediaMs)
+    {
+        const bool wasStopped = m_timeshift->stopped();
+        m_timeshift->write(data, size, mediaMs);
+
+        if (!m_announced || m_timeshift->stopped() != wasStopped) {
+            m_announced = true;
+            m_changed();
+        }
+    }
+
+    // Writing to disk, or about to once the format is known.
+    [[nodiscard]] bool recording() const
+    {
+        return m_timeshift
+            || (m_target.rewindMs > 0 && !m_directory.isEmpty() && !m_buffer.formatKnown());
+    }
+
+    // A session that may still be played from lives without players.
+    [[nodiscard]] bool keepAlive() const
+    {
+        return m_timeshift || (recording() && !m_upstreamDone);
+    }
+
+    void detach(QTcpSocket *socket)
+    {
+        m_readers.removeIf([socket](const Reader &reader) {
+            return !reader.socket || reader.socket == socket;
+        });
+
+        if (m_readers.isEmpty() && !keepAlive()) {
+            dropReply();
+            deleteLater();
+        }
+    }
+
+    Reader *liveReader()
+    {
+        for (Reader &reader : m_readers) {
+            if (!reader.fromFile && reader.socket
+                && reader.socket->state() == QAbstractSocket::ConnectedState) {
+                return &reader;
+            }
+        }
+
+        return nullptr;
+    }
+
     void request()
     {
         QNetworkRequest upstreamRequest(m_target.url);
@@ -104,7 +282,7 @@ private:
 
     void received()
     {
-        if (!m_headerSent && !answer()) {
+        if (!m_typeKnown && !answer()) {
             return;
         }
 
@@ -112,7 +290,7 @@ private:
         pump();
     }
 
-    // Starts the response to the player. False when the player was sent elsewhere.
+    // Starts the response to the players. False when they were sent elsewhere.
     bool answer()
     {
         const QByteArray type = m_reply->header(QNetworkRequest::ContentTypeHeader).toByteArray();
@@ -122,7 +300,13 @@ private:
                 // Let the player fetch the playlist and its segments itself.
                 const QByteArray location = m_reply->url().toEncoded();
                 dropReply();
-                respond(m_socket, "302 Found", "Location: " + location + "\r\n");
+                m_upstreamDone = true;
+
+                for (const Reader &reader : std::as_const(m_readers)) {
+                    if (reader.socket) {
+                        respond(reader.socket, "302 Found", "Location: " + location + "\r\n");
+                    }
+                }
 
                 return false;
             }
@@ -131,28 +315,35 @@ private:
             m_passThrough = true;
         }
 
-        m_headerSent = true;
-        m_socket->write("HTTP/1.1 200 OK\r\nContent-Type: "
-                        + (type.isEmpty() ? QByteArray("application/octet-stream") : type)
-                        + "\r\nConnection: close\r\n\r\n");
+        m_typeKnown = true;
+        m_contentType = type.isEmpty() ? QByteArray("application/octet-stream") : type;
+        sendHeaders();
 
         return true;
     }
 
-    // Moves data from the server to the buffer and from the buffer to the player.
+    void sendHeaders()
+    {
+        for (Reader &reader : m_readers) {
+            if (!reader.headerSent && reader.socket) {
+                reader.headerSent = true;
+                reader.socket->write("HTTP/1.1 200 OK\r\nContent-Type: " + m_contentType
+                                     + "\r\nConnection: close\r\n\r\n");
+            }
+        }
+    }
+
+    // Moves data from the server to the buffer and the disk, and from there to the players.
     void pump()
     {
-        if (m_socket->state() != QAbstractSocket::ConnectedState) {
-            return;
-        }
-
         bool progress = true;
 
         while (progress) {
             progress = false;
+            Reader *live = liveReader();
 
-            if (m_reply && m_headerSent && m_reply->bytesAvailable() > 0
-                && (m_passThrough || !m_buffer.full())) {
+            if (m_reply && m_typeKnown && m_reply->bytesAvailable() > 0
+                && (m_passThrough ? live != nullptr : recording() || !m_buffer.full())) {
                 const QByteArray data = m_reply->read(s_chunkSize);
                 m_replyBytes += data.size();
 
@@ -161,23 +352,78 @@ private:
                 }
 
                 if (m_passThrough) {
-                    m_socket->write(data);
+                    live->socket->write(data);
                 } else {
-                    m_buffer.append(data);
+                    append(data);
                 }
 
                 progress = true;
             }
 
-            if (!m_passThrough && m_socket->bytesToWrite() < s_maxPending) {
+            live = liveReader();
+
+            if (!m_passThrough && live && live->headerSent
+                && live->socket->bytesToWrite() < s_maxPending) {
                 const QByteArray data = m_buffer.take(s_chunkSize);
 
                 if (!data.isEmpty()) {
-                    m_socket->write(data);
+                    live->socket->write(data);
                     progress = true;
                 }
             }
+
+            progress = serveFiles() || progress;
         }
+    }
+
+    void append(const QByteArray &data)
+    {
+        m_buffer.append(data);
+
+        // Nobody waits for the live buffer when the disk has it all.
+        if (recording()) {
+            m_buffer.keepNewest(liveReader() ? s_maxLiveQueue : 0);
+        }
+    }
+
+    // Feeds the players that play from disk. True when something was sent.
+    bool serveFiles()
+    {
+        if (!m_timeshift) {
+            return false;
+        }
+
+        bool progress = false;
+        QList<QPointer<QTcpSocket>> finished;
+
+        for (Reader &reader : m_readers) {
+            if (!reader.fromFile || !reader.socket || !reader.headerSent
+                || reader.socket->bytesToWrite() >= s_maxPending) {
+                continue;
+            }
+
+            // Deleted while the player was paused: continue at the oldest data.
+            reader.position = qMax(reader.position, m_timeshift->oldestPosition());
+            const QByteArray data = m_timeshift->read(reader.position, s_chunkSize);
+
+            if (!data.isEmpty()) {
+                reader.socket->write(data);
+                reader.position += data.size();
+                progress = true;
+            } else if ((m_timeshift->stopped() || m_upstreamDone)
+                       && reader.position >= m_timeshift->endPosition()) {
+                // Nothing more will come: the player goes back to live.
+                finished.append(reader.socket);
+            }
+        }
+
+        for (const QPointer<QTcpSocket> &socket : std::as_const(finished)) {
+            if (socket) {
+                socket->disconnectFromHost();
+            }
+        }
+
+        return progress;
     }
 
     void finished()
@@ -188,11 +434,17 @@ private:
 
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
-        if (!m_headerSent) {
+        if (!m_typeKnown) {
+            m_upstreamDone = true;
+
             if (reply->error() != QNetworkReply::NoError) {
-                respond(m_socket,
-                        status >= 400 ? QByteArray::number(status) + " Upstream Error"
-                                      : QByteArray("502 Bad Gateway"));
+                for (const Reader &reader : std::as_const(m_readers)) {
+                    if (reader.socket) {
+                        respond(reader.socket,
+                                status >= 400 ? QByteArray::number(status) + " Upstream Error"
+                                              : QByteArray("502 Bad Gateway"));
+                    }
+                }
 
                 return;
             }
@@ -203,7 +455,7 @@ private:
             m_reply = nullptr;
 
             if (answered) {
-                m_socket->disconnectFromHost();
+                closeLive();
             }
 
             return;
@@ -213,13 +465,17 @@ private:
         const QByteArray rest = reply->readAll();
 
         if (m_passThrough) {
-            m_socket->write(rest);
-            m_socket->disconnectFromHost();
+            if (Reader *live = liveReader()) {
+                live->socket->write(rest);
+            }
+
+            m_upstreamDone = true;
+            closeLive();
 
             return;
         }
 
-        m_buffer.append(rest);
+        append(rest);
 
         // These won't get better by asking again; the player's own retry gets a fresh address.
         if (status == 401 || status == 403 || status == 404 || status == 410) {
@@ -255,7 +511,7 @@ private:
 
     void reconnect()
     {
-        if (m_socket->state() != QAbstractSocket::ConnectedState) {
+        if (m_readers.isEmpty() && !keepAlive()) {
             return;
         }
 
@@ -272,9 +528,23 @@ private:
 
     void giveUp()
     {
+        m_upstreamDone = true;
         m_buffer.endOfData();
-        m_socket->write(m_buffer.drain());
-        m_socket->disconnectFromHost();
+
+        if (Reader *live = liveReader()) {
+            live->socket->write(m_buffer.drain());
+        }
+
+        closeLive();
+        // Players behind live finish what is on disk first.
+        pump();
+    }
+
+    void closeLive()
+    {
+        if (Reader *live = liveReader()) {
+            live->socket->disconnectFromHost();
+        }
     }
 
     void dropReply()
@@ -290,20 +560,26 @@ private:
         }
     }
 
-    QTcpSocket *m_socket;
     StreamProxy::Target m_target;
     StreamProxy::Timing m_timing;
     QNetworkAccessManager *m_networkManager;
+    StreamProxy::TimeshiftOptions m_options;
+    QString m_directory;
+    std::function<void()> m_changed;
     StreamBuffer m_buffer;
+    std::unique_ptr<TimeshiftBuffer> m_timeshift;
+    QList<Reader> m_readers;
     QPointer<QNetworkReply> m_reply;
     QTimer m_stallTimer;
     QTimer m_retryTimer;
-    bool m_headerSent = false;
+    QByteArray m_contentType;
+    bool m_typeKnown = false;
     bool m_passThrough = false;
+    bool m_upstreamDone = false;
+    bool m_announced = false;
     int m_attempts = 0;
     qint64 m_replyBytes = 0;
 };
-}
 
 StreamProxy::StreamProxy(QObject *parent)
     : QObject(parent)
@@ -316,6 +592,14 @@ StreamProxy::StreamProxy(QObject *parent)
             handleConnection(socket);
         }
     });
+}
+
+StreamProxy::~StreamProxy()
+{
+    // Before the network manager their replies belong to.
+    for (const QPointer<StreamSession> &session : std::as_const(m_sessions)) {
+        delete session.data();
+    }
 }
 
 bool StreamProxy::isHls(const QUrl &url)
@@ -367,14 +651,70 @@ QUrl StreamProxy::relay(const QUrl &upstream,
     m_targets.insert(token, target);
     m_order.append(token);
     while (m_order.size() > s_maxTargets) {
-        m_targets.remove(m_order.takeFirst());
+        const QString old = m_order.takeFirst();
+        m_targets.remove(old);
+        delete session(old);
+        m_sessions.remove(old);
     }
 
+    return address(token);
+}
+
+QUrl StreamProxy::address(const QString &token) const
+{
     QUrl url;
     url.setScheme(QStringLiteral("http"));
     url.setHost(QStringLiteral("127.0.0.1"));
     url.setPort(m_server->serverPort());
     url.setPath(QLatin1Char('/') + token);
+
+    return url;
+}
+
+QString StreamProxy::tokenOf(const QUrl &relayUrl)
+{
+    return relayUrl.path().mid(1);
+}
+
+StreamSession *StreamProxy::session(const QString &token) const
+{
+    return m_sessions.value(token).data();
+}
+
+void StreamProxy::setRewind(const QUrl &relayUrl, qint64 maxMs)
+{
+    const auto target = m_targets.find(tokenOf(relayUrl));
+
+    if (target != m_targets.end()) {
+        target->rewindMs = qMax<qint64>(0, maxMs);
+    }
+}
+
+bool StreamProxy::hold(const QUrl &relayUrl)
+{
+    StreamSession *found = session(tokenOf(relayUrl));
+
+    return found && found->hold();
+}
+
+void StreamProxy::end(const QUrl &relayUrl)
+{
+    const QString token = tokenOf(relayUrl);
+    delete session(token);
+    m_sessions.remove(token);
+}
+
+StreamProxy::TimeshiftState StreamProxy::timeshift(const QUrl &relayUrl) const
+{
+    const StreamSession *found = session(tokenOf(relayUrl));
+
+    return found ? found->state() : TimeshiftState{};
+}
+
+QUrl StreamProxy::behind(const QUrl &relayUrl, qint64 behindMs)
+{
+    QUrl url = relayUrl;
+    url.setQuery(behindMs > 0 ? QStringLiteral("behind=%1").arg(behindMs) : QString());
 
     return url;
 }
@@ -415,13 +755,34 @@ void StreamProxy::serve(QTcpSocket *socket, const QByteArray &request)
         return;
     }
 
-    const auto target = m_targets.constFind(QString::fromLatin1(requestLine.at(1).mid(1)));
+    const QUrl requested = QUrl::fromEncoded(requestLine.at(1));
+    const QString token = tokenOf(requested);
+    const auto target = m_targets.constFind(token);
     if (target == m_targets.cend()) {
         respond(socket, "404 Not Found");
 
         return;
     }
 
-    // Lives as long as the player's connection.
-    new Session(socket, *target, m_timing, m_networkManager);
+    StreamSession *existing = session(token);
+
+    if (!existing) {
+        const QString directory = m_timeshiftOptions.root.isEmpty()
+            ? QString()
+            : m_timeshiftOptions.root + QLatin1Char('/') + token;
+        existing = new StreamSession(
+            *target,
+            m_timing,
+            m_networkManager,
+            m_timeshiftOptions,
+            directory,
+            [this, token]() {
+                Q_EMIT timeshiftChanged(address(token));
+            },
+            this);
+        m_sessions.insert(token, existing);
+    }
+
+    const QUrlQuery query(requested);
+    existing->attach(socket, query.queryItemValue(QStringLiteral("behind")).toLongLong());
 }
