@@ -161,6 +161,7 @@ qt_add_qml_module(flimmer
         qml/ChannelsPage.qml
         qml/GuidePage.qml
         qml/SettingsPage.qml
+        qml/ProgrammeBar.qml
         qml/TvButton.qml
         qml/TextEntryDialog.qml
         qml/EventDialog.qml
