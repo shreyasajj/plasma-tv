@@ -33,6 +33,26 @@ Item {
     readonly property bool timeshifting: behindMs > 0
     readonly property bool rewindOn: Settings.rewindMinutes > 0
 
+    // While paused: the moment on screen when pausing, and the one chosen with the arrow
+    // keys, as times. Resuming plays from the chosen one.
+    property double pausedAtMoment: 0
+    property double scrubAtMs: 0
+    readonly property bool scrubbed: paused && scrubAtMs !== pausedAtMoment
+
+    // No moving picture for a moment: the loading screen covers the video.
+    readonly property bool waiting: active && !paused && error.length === 0 && (awaitingUrl || (player.mediaStatus !== MediaPlayer.BufferedMedia && player.mediaStatus !== MediaPlayer.EndOfMedia && player.mediaStatus !== MediaPlayer.InvalidMedia))
+    property bool loading: false
+    // The channel played since it was started, so waiting now is buffering.
+    property bool startedOnce: false
+    onWaitingChanged: {
+        if (waiting) {
+            loadingDelay.restart();
+        } else {
+            loadingDelay.stop();
+            loading = false;
+        }
+    }
+
     // A plain pause (nothing kept) can't be caught up with, so it doesn't count.
     function currentBehindMs() {
         if (!held)
@@ -57,6 +77,8 @@ Item {
             // With rewinding on everything is kept already; otherwise from now on, if it can be.
             held = rewindOn ? Tvh.rewindAvailable : (held || Tvh.holdStream());
             behindMs = currentBehindMs();
+            pausedAtMoment = pausedAt - behindMs;
+            scrubAtMs = pausedAtMoment;
 
             return;
         }
@@ -65,13 +87,32 @@ Item {
         paused = false;
 
         // The player's own connection lost what came meanwhile: continue from disk.
-        if (held && currentBehindMs() > 500) {
-            playFrom(currentBehindMs());
+        const behind = Date.now() - scrubAtMs;
+
+        if (held && (behind > 500 || scrubAtMs !== pausedAtMoment)) {
+            playFrom(behind);
 
             return;
         }
 
         player.play();
+    }
+
+    // Moves the chosen moment while paused, within what is kept. False when it can't move.
+    function scrubBy(deltaMs) {
+        if (!paused || !held)
+            return false;
+
+        const live = Date.now();
+        // With rewinding off, what is kept starts at the pause.
+        const oldest = rewindOn ? live - windowMs() : pausedAtMoment;
+        scrubAtMs = Math.max(oldest, Math.min(live, scrubAtMs + deltaMs));
+
+        return true;
+    }
+
+    function resetScrub() {
+        scrubAtMs = pausedAtMoment;
     }
 
     // Plays 'ms' behind live, within what was kept. 0 is live.
@@ -94,6 +135,8 @@ Item {
 
     function endTimeshift() {
         paused = false;
+        pausedAtMoment = 0;
+        scrubAtMs = 0;
         held = false;
         sourceBehindMs = 0;
         pausedMs = 0;
@@ -110,6 +153,7 @@ Item {
         player.source = "";
         channelUuid = uuid;
         error = "";
+        startedOnce = false;
         awaitingUrl = true;
         Tvh.requestStream(uuid);
     }
@@ -203,8 +247,10 @@ Item {
             root.scheduleReconnect(errorString.length > 0 ? errorString : qsTr("Playback failed"));
         }
         onMediaStatusChanged: {
-            if (mediaStatus === MediaPlayer.BufferedMedia)
+            if (mediaStatus === MediaPlayer.BufferedMedia) {
                 root.retries = 0;
+                root.startedOnce = true;
+            }
 
             if (mediaStatus !== MediaPlayer.EndOfMedia || !root.active || root.paused)
                 return;
@@ -235,6 +281,12 @@ Item {
             if (root.rewindOn && root.active)
                 root.held = root.held || Tvh.rewindAvailable;
         }
+    }
+
+    Timer {
+        id: loadingDelay
+        interval: 500
+        onTriggered: root.loading = root.waiting
     }
 
     Timer {

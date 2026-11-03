@@ -696,6 +696,15 @@ bool TvhBackend::holdStream()
     return held;
 }
 
+QVariantMap TvhBackend::bufferState() const
+{
+    const StreamProxy::BufferState state = m_streamProxy->liveBuffer(m_playingRelay);
+
+    return {{QStringLiteral("bufferedMs"), static_cast<double>(state.bufferedMs)},
+            {QStringLiteral("targetMs"), static_cast<double>(state.targetMs)},
+            {QStringLiteral("filling"), state.filling}};
+}
+
 QUrl TvhBackend::timeshiftUrl(double behindMs) const
 {
     return StreamProxy::behind(m_playingRelay, static_cast<qint64>(behindMs));

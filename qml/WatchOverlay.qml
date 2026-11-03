@@ -33,7 +33,7 @@ FocusScope {
     // Counts every second while the info bar or the jump bar is shown.
     property double clockMs: Date.now()
     // The moment on screen, and the oldest one that can be rewound to.
-    readonly property double playingMs: clockMs - player.behindMs
+    readonly property double playingMs: player.paused ? player.scrubAtMs : clockMs - player.behindMs
     readonly property double oldestMs: player.held ? clockMs - player.windowMs() : clockMs
     // The programme being watched, which is an earlier one after rewinding past its start.
     readonly property var nowEvent: {
@@ -73,9 +73,27 @@ FocusScope {
         showInfo();
     }
 
+    // Stays on the whole time while paused.
     function showInfo() {
         infoShown = true;
-        infoTimer.restart();
+        jumpBar.visible = false;
+
+        if (player.paused)
+            infoTimer.stop();
+        else
+            infoTimer.restart();
+    }
+
+    // Left, Right, Rewind and Fast Forward: the chosen moment while paused, a jump otherwise.
+    function moveInTime(deltaMs) {
+        if (player.paused) {
+            if (player.scrubBy(deltaMs))
+                showInfo();
+            else if (deltaMs < 0 && player.rewindOn && !player.held)
+                flash(qsTr("Rewind isn't available for this channel"));
+        } else {
+            queueJump(deltaMs);
+        }
     }
 
     function togglePause() {
@@ -107,6 +125,8 @@ FocusScope {
         const oldest = player.rewindOn ? player.windowMs() : player.currentBehindMs();
         jumpTargetMs = Math.max(0, Math.min(oldest, from - deltaMs));
         jumpTimer.restart();
+        // One bar at a time at the bottom.
+        infoShown = false;
         jumpBar.show();
     }
 
@@ -164,25 +184,25 @@ FocusScope {
             zap(-1);
             break;
         case Qt.Key_Left:
-            // While paused, Left and Right move in time instead.
-            if (player.paused && player.held && player.rewindOn)
-                queueJump(-rewindStepMs);
+            // While paused with something kept, Left and Right move the chosen moment.
+            if (player.paused && player.held)
+                moveInTime(-rewindStepMs);
             else
                 openZapList();
             break;
         case Qt.Key_Right:
             if (player.paused && player.held)
-                queueJump(forwardStepMs);
+                moveInTime(forwardStepMs);
             else
                 leave("guide");
             break;
         case Qt.Key_AudioRewind:
         case Qt.Key_R:
-            queueJump(-rewindStepMs);
+            moveInTime(-rewindStepMs);
             break;
         case Qt.Key_AudioForward:
         case Qt.Key_F:
-            queueJump(forwardStepMs);
+            moveInTime(forwardStepMs);
             break;
         case Qt.Key_Info:
         case Qt.Key_I:
@@ -217,7 +237,9 @@ FocusScope {
                 else
                     togglePause();
             } else if (Theme.isBack(event.key)) {
-                if (player.timeshifting)
+                if (player.scrubbed)
+                    player.resetScrub();
+                else if (player.timeshifting)
                     livePanel.open();
                 else if (Settings.confirmQuit)
                     quitMenu.open();
@@ -272,6 +294,12 @@ FocusScope {
         }
     }
 
+    // --- Starting or refilling: under everything else ----------------------------
+    LoadingScreen {
+        anchors.fill: parent
+        player: root.player
+    }
+
     // --- Error ------------------------------------------------------------
     Rectangle {
         anchors.centerIn: parent
@@ -305,6 +333,9 @@ FocusScope {
         target: root.player
         function onNotice(text) {
             root.flash(text);
+        }
+        function onPausedChanged() {
+            root.showInfo();
         }
     }
 
@@ -561,7 +592,7 @@ FocusScope {
             Text {
                 width: parent.width
                 visible: text.length > 0
-                text: root.pendingUuid.length > 0 ? "" : root.keptText(root.player.behindMs)
+                text: root.pendingUuid.length > 0 ? "" : root.keptText(root.clockMs - root.playingMs)
                 color: "#d0d6df"
                 font.pixelSize: Theme.fontSmall
             }

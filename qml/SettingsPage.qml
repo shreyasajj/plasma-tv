@@ -19,7 +19,7 @@ FocusScope {
     property int dDays: 3
     // -1 = Auto, 0 = Off, else seconds
     property int dBuffer: -1
-    readonly property var bufferModes: [-1, 0, 2, 5, 10]
+    readonly property var bufferModes: [-1, 0, 2, 5, 10, 20, 30]
     property int dRewind: 0
     readonly property var rewindChoices: [0, 15, 30, 60, 120]
     readonly property int rewindIndex: Math.max(0, rewindChoices.indexOf(dRewind))
