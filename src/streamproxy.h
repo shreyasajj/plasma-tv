@@ -78,6 +78,15 @@ public:
     // Ends the session of 'relayUrl': closes its connections and deletes its files.
     void end(const QUrl &relayUrl);
     [[nodiscard]] TimeshiftState timeshift(const QUrl &relayUrl) const;
+
+    struct BufferState {
+        qint64 bufferedMs = 0;
+        qint64 targetMs = 0;
+        // Data is held back until the target is reached.
+        bool filling = false;
+    };
+    // The live player's buffer; zeros without a live player.
+    [[nodiscard]] BufferState liveBuffer(const QUrl &relayUrl) const;
     // The address that plays 'relayUrl' 'behindMs' behind live.
     static QUrl behind(const QUrl &relayUrl, qint64 behindMs);
 

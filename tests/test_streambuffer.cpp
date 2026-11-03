@@ -85,7 +85,9 @@ private Q_SLOTS:
         QCOMPARE(StreamBuffer::normalizeMode(3), 2);
         QCOMPARE(StreamBuffer::normalizeMode(4), 5);
         QCOMPARE(StreamBuffer::normalizeMode(8), 10);
-        QCOMPARE(StreamBuffer::normalizeMode(30), 10);
+        QCOMPARE(StreamBuffer::normalizeMode(18), 20);
+        QCOMPARE(StreamBuffer::normalizeMode(30), 30);
+        QCOMPARE(StreamBuffer::normalizeMode(100), 30);
     }
 
     void skipsJunkBeforeFirstPacket()
@@ -160,7 +162,7 @@ private Q_SLOTS:
         QVERIFY(!buffer.take(1 << 24).isEmpty());
 
         qint64 ms = 1100;
-        for (const qint64 expected : {2000, 5000, 10000, 10000}) {
+        for (const qint64 expected : {2000, 5000, 10000, 20000, 30000, 30000}) {
             // The player emptied the buffer and waited longer than a stall.
             QVERIFY(buffer.take(1 << 24).isEmpty());
             now += StreamBuffer::s_stallMs + 500;
@@ -302,6 +304,31 @@ private Q_SLOTS:
         QVERIFY(buffer.full());
         buffer.take(2 * 1024 * 1024);
         QVERIFY(!buffer.full());
+    }
+
+    void holdsUpTo128MegabytesWhileFilling()
+    {
+        StreamBuffer buffer(30);
+        // No media time passes, so only the size ends the filling.
+        QByteArray block;
+
+        while (block.size() < 1024 * 1024) {
+            block += packet(0) + packet();
+        }
+
+        while (buffer.size() < 120 * 1024 * 1024) {
+            buffer.append(block);
+        }
+
+        QVERIFY(buffer.filling());
+        QVERIFY(buffer.take(1024).isEmpty());
+
+        while (buffer.size() < 128 * 1024 * 1024) {
+            buffer.append(block);
+        }
+
+        QVERIFY(buffer.full());
+        QVERIFY(!buffer.take(1024).isEmpty());
     }
 
     void sinkGetsEveryPacketWithMediaTime()
