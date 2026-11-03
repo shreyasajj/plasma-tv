@@ -145,6 +145,7 @@ qt_add_qml_module(flimmer
         src/xmltv.h src/xmltv.cpp
         src/streambuffer.h src/streambuffer.cpp
         src/streamproxy.h src/streamproxy.cpp
+        src/timeshiftbuffer.h src/timeshiftbuffer.cpp
         src/epgdatabase.h src/epgdatabase.cpp
         src/epgstore.h src/epgstore.cpp
         src/channelmodel.h src/channelmodel.cpp
@@ -166,7 +167,6 @@ qt_add_qml_module(flimmer
         src/logoimageprovider.h src/logoimageprovider.cpp
         src/inputdebug.h src/inputdebug.cpp
         src/remotekeys.h src/remotekeys.cpp
-        src/streamrecorder.h src/streamrecorder.cpp
     QML_FILES
         qml/Main.qml
         qml/Theme.qml

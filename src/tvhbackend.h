@@ -43,6 +43,7 @@ class TvhBackend : public QObject
     // One entry per enabled source: id, name, type, status (Status), text.
     Q_PROPERTY(QVariantList sourceStatus READ sourceStatus NOTIFY statusChanged)
     Q_PROPERTY(QDateTime lastUpdate READ lastUpdate NOTIFY epgChanged)
+    Q_PROPERTY(bool rewindAvailable READ rewindAvailable NOTIFY rewindChanged)
     Q_PROPERTY(int epgRevision READ epgRevision NOTIFY epgChanged)
     Q_PROPERTY(double epgEnd READ epgEnd NOTIFY epgChanged)
     Q_PROPERTY(double now READ now NOTIFY tick)
@@ -131,6 +132,20 @@ public:
     // Playing a channel failed for good; its source may emit streamFailed() with the reason.
     Q_INVOKABLE void explainStreamError(const QString &uuid);
 
+    // Rewinding the playing channel. See StreamProxy for what is kept on disk.
+    [[nodiscard]] bool rewindAvailable() const;
+    Q_INVOKABLE [[nodiscard]] double rewindWindowMs() const;
+    // Keeps the stream from now on while paused with rewinding off. False when it can't be
+    // kept (HLS or not MPEG-TS): the player then pauses plainly.
+    Q_INVOKABLE bool holdStream();
+    // The playing channel 'behindMs' behind live; 0 is live.
+    Q_INVOKABLE [[nodiscard]] QUrl timeshiftUrl(double behindMs) const;
+    // Ends the playing channel's stream and deletes what was kept of it.
+    Q_INVOKABLE void stopStream();
+
+    // The server's address of a channel's stream, without credentials. Empty if unknown.
+    [[nodiscard]] QUrl streamUrl(const QString &uuid) const;
+
     Q_INVOKABLE void record(double eventId);
     Q_INVOKABLE void cancelRecording(double eventId);
 
@@ -144,6 +159,7 @@ Q_SIGNALS:
     void streamFailed(const QString &uuid, const QString &message);
     void connectionTestFinished(bool ok, const QString &message);
     void notification(const QString &message);
+    void rewindChanged();
 
 private:
     struct SourceState {
@@ -180,6 +196,8 @@ private:
     QList<SourceState> m_sources; // enabled sources, in the order of the settings
     ChannelModel *m_channels;
     StreamProxy *m_streamProxy;
+    QUrl m_playingRelay;
+    bool m_rewindStopped = false;
     EpgStore m_store;
     EpgDatabase m_database;
 

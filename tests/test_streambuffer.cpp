@@ -6,6 +6,8 @@
 
 #include <QTest>
 
+#include <algorithm>
+
 namespace
 {
 constexpr int s_pid = 0x100;
@@ -300,6 +302,76 @@ private Q_SLOTS:
         QVERIFY(buffer.full());
         buffer.take(2 * 1024 * 1024);
         QVERIFY(!buffer.full());
+    }
+
+    void sinkGetsEveryPacketWithMediaTime()
+    {
+        StreamBuffer buffer(StreamBuffer::Off);
+        QByteArray written;
+        QList<qint64> times;
+        buffer.setPacketSink([&](const char *data, qint64 size, qint64 mediaMs) {
+            written.append(data, size);
+            times.append(mediaMs);
+        });
+
+        const QByteArray first = stream(0, 2000);
+        buffer.append(QByteArray("junk") + first);
+        QCOMPARE(written, first);
+        QCOMPARE(times.front(), 0);
+        QCOMPARE(times.back(), 2000);
+
+        // After a reconnect the server's clock starts elsewhere; the media time continues.
+        buffer.append(first.left(100));
+        buffer.cutForReconnect();
+        written.clear();
+        times.clear();
+        const QByteArray second = stream(0, 1000, 123456789);
+        buffer.append(second);
+        QCOMPARE(written, second);
+        QVERIFY(times.front() >= 2000);
+        QVERIFY(times.back() <= 3100);
+        QVERIFY(std::is_sorted(times.cbegin(), times.cend()));
+    }
+
+    void replaysWhatThePlayerDidntTake()
+    {
+        StreamBuffer buffer(StreamBuffer::Off);
+        const QByteArray data = stream(0, 3000);
+        buffer.append(data);
+        buffer.take(1000); // ends inside a packet
+
+        QByteArray replayed;
+        qint64 firstMs = -1;
+        buffer.replayQueued([&](const char *packetData, qint64 size, qint64 mediaMs) {
+            if (firstMs < 0) {
+                firstMs = mediaMs;
+            }
+
+            replayed.append(packetData, size);
+        });
+
+        const qsizetype next = StreamBuffer::s_packetSize * 6;
+        QCOMPARE(replayed, data.mid(next));
+        QCOMPARE(firstMs, 100);
+        QVERIFY(aligned(replayed));
+    }
+
+    void keepsNewestOnPacketBoundary()
+    {
+        StreamBuffer buffer(StreamBuffer::Off);
+        const QByteArray data = stream(0, 5000);
+        buffer.append(data);
+
+        buffer.keepNewest(1000);
+        QVERIFY(buffer.size() <= 1000);
+        QVERIFY(buffer.size() > 1000 - StreamBuffer::s_packetSize);
+        const QByteArray rest = buffer.drain();
+        QVERIFY(aligned(rest));
+        QCOMPARE(rest, data.right(rest.size()));
+
+        buffer.append(stream(5100, 6000));
+        buffer.keepNewest(0);
+        QCOMPARE(buffer.size(), 0);
     }
 };
 
