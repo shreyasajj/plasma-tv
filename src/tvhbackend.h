@@ -132,6 +132,8 @@ public:
     Q_INVOKABLE bool holdStream();
     // The playing channel 'behindMs' behind live; 0 is live.
     Q_INVOKABLE [[nodiscard]] QUrl timeshiftUrl(double behindMs) const;
+    // The playing channel's playback buffer: bufferedMs, targetMs and filling.
+    Q_INVOKABLE [[nodiscard]] QVariantMap bufferState() const;
     // Ends the playing channel's stream and deletes what was kept of it.
     Q_INVOKABLE void stopStream();
 

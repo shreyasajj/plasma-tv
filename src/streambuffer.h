@@ -27,7 +27,7 @@ public:
     // Buffer modes, in seconds. Auto starts at 0 and grows after each stall.
     static constexpr int Auto = -1;
     static constexpr int Off = 0;
-    // Nearest supported mode: Auto, Off, 2, 5 or 10.
+    // Nearest supported mode: Auto, Off, 2, 5, 10, 20 or 30.
     static int normalizeMode(int seconds);
 
     static constexpr int s_packetSize = 188;

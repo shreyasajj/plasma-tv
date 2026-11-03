@@ -21,12 +21,12 @@ constexpr qsizetype s_maxSyncSearch = static_cast<const qsizetype>(8 * 1024);
 // Bytes are queued up to this size whatever the target is.
 constexpr qint64 s_minFull = static_cast<const qint64>(4 * 1024 * 1024);
 // ...and never more than this.
-constexpr qint64 s_maxFull = static_cast<const qint64>(64 * 1024 * 1024);
+constexpr qint64 s_maxFull = static_cast<const qint64>(128 * 1024 * 1024);
 // Byte rate window for streams without PCR.
 constexpr qint64 s_rateWindowMs = 10000;
 constexpr qint64 s_minRateSpanMs = 500;
 // Auto grows to the next of these after each stall.
-constexpr std::array<qint64, 4> s_autoSteps = {0, 2000, 5000, 10000};
+constexpr std::array<qint64, 6> s_autoSteps = {0, 2000, 5000, 10000, 20000, 30000};
 }
 
 int StreamBuffer::normalizeMode(int seconds)
@@ -37,7 +37,7 @@ int StreamBuffer::normalizeMode(int seconds)
 
     int best = 0;
 
-    for (const int mode : {0, 2, 5, 10}) {
+    for (const int mode : {0, 2, 5, 10, 20, 30}) {
         if (std::abs(seconds - mode) < std::abs(seconds - best)) {
             best = mode;
         }
