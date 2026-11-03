@@ -35,7 +35,7 @@ public:
     };
 
     // 'directory' is created and owned: it is deleted with the buffer.
-    TimeshiftBuffer(const QString &directory, Options options);
+    TimeshiftBuffer(QString directory, Options options);
     ~TimeshiftBuffer();
 
     TimeshiftBuffer(const TimeshiftBuffer &) = delete;

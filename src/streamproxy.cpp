@@ -240,9 +240,9 @@ private:
         }
     }
 
-    Reader *liveReader()
+    [[nodiscard]] const Reader *liveReader() const
     {
-        for (Reader &reader : m_readers) {
+        for (const Reader &reader : m_readers) {
             if (!reader.fromFile && reader.socket
                 && reader.socket->state() == QAbstractSocket::ConnectedState) {
                 return &reader;
@@ -340,7 +340,7 @@ private:
 
         while (progress) {
             progress = false;
-            Reader *live = liveReader();
+            const Reader *live = liveReader();
 
             if (m_reply && m_typeKnown && m_reply->bytesAvailable() > 0
                 && (m_passThrough ? live != nullptr : recording() || !m_buffer.full())) {
@@ -465,7 +465,7 @@ private:
         const QByteArray rest = reply->readAll();
 
         if (m_passThrough) {
-            if (Reader *live = liveReader()) {
+            if (const Reader *live = liveReader()) {
                 live->socket->write(rest);
             }
 
@@ -531,7 +531,7 @@ private:
         m_upstreamDone = true;
         m_buffer.endOfData();
 
-        if (Reader *live = liveReader()) {
+        if (const Reader *live = liveReader()) {
             live->socket->write(m_buffer.drain());
         }
 
@@ -542,7 +542,7 @@ private:
 
     void closeLive()
     {
-        if (Reader *live = liveReader()) {
+        if (const Reader *live = liveReader()) {
             live->socket->disconnectFromHost();
         }
     }
