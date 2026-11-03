@@ -42,6 +42,11 @@ FocusScope {
     }
     property bool infoShown: false
 
+    // Behind live after the presses of the last 0.6 s, which are played as one jump.
+    property double jumpTargetMs: 0
+    readonly property int rewindStepMs: 10000
+    readonly property int forwardStepMs: 30000
+
     function play(uuid) {
         zapDelay.stop();
         pendingUuid = "";
@@ -70,6 +75,33 @@ FocusScope {
     function togglePause() {
         player.togglePause();
         showInfo();
+    }
+
+    // "2:30" or "1:02:30".
+    function formatBehind(ms) {
+        const total = Math.round(ms / 1000);
+        const h = Math.floor(total / 3600);
+        const m = Math.floor(total / 60) % 60;
+        const sec = String(total % 60).padStart(2, "0");
+        return h > 0 ? h + ":" + String(m).padStart(2, "0") + ":" + sec : m + ":" + sec;
+    }
+
+    // Rewind (negative) or move forward; presses close together add up.
+    function queueJump(deltaMs) {
+        if (!player.held) {
+            if (deltaMs < 0 && player.rewindOn)
+                flash(qsTr("Rewind isn't available for this channel"));
+            return;
+        }
+        if (deltaMs < 0 && !player.rewindOn)
+            return;
+
+        const from = jumpTimer.running ? jumpTargetMs : player.currentBehindMs();
+        // With rewinding off, only the pause can be caught up with.
+        const oldest = player.rewindOn ? player.windowMs() : player.currentBehindMs();
+        jumpTargetMs = Math.max(0, Math.min(oldest, from - deltaMs));
+        jumpTimer.restart();
+        jumpBar.show();
     }
 
     function flash(text) {
@@ -118,10 +150,25 @@ FocusScope {
             zap(-1);
             break;
         case Qt.Key_Left:
-            openZapList();
+            // While paused, Left and Right move in time instead.
+            if (player.paused && player.held && player.rewindOn)
+                queueJump(-rewindStepMs);
+            else
+                openZapList();
             break;
         case Qt.Key_Right:
-            leave("guide");
+            if (player.paused && player.held)
+                queueJump(forwardStepMs);
+            else
+                leave("guide");
+            break;
+        case Qt.Key_AudioRewind:
+        case Qt.Key_R:
+            queueJump(-rewindStepMs);
+            break;
+        case Qt.Key_AudioForward:
+        case Qt.Key_F:
+            queueJump(forwardStepMs);
             break;
         case Qt.Key_Info:
         case Qt.Key_I:
@@ -156,7 +203,9 @@ FocusScope {
                 else
                     togglePause();
             } else if (Theme.isBack(event.key)) {
-                if (Settings.confirmQuit)
+                if (player.timeshifting)
+                    livePanel.open();
+                else if (Settings.confirmQuit)
                     quitMenu.open();
                 else if (infoShown)
                     infoShown = false;
@@ -179,6 +228,11 @@ FocusScope {
         id: infoTimer
         interval: 6000
         onTriggered: root.infoShown = false
+    }
+    Timer {
+        id: jumpTimer
+        interval: 600
+        onTriggered: root.player.playFrom(root.jumpTargetMs)
     }
     Timer {
         id: zapTimer
@@ -263,6 +317,91 @@ FocusScope {
         }
     }
 
+    // --- BACK while behind live: return to live (BACK again keeps watching) -----
+    BigscreenUI.Dialog {
+        id: livePanel
+        title: qsTr("%1 behind live").arg(root.formatBehind(root.player.behindMs))
+        openFocusItem: liveButton
+        width: Math.max(implicitHeaderWidth, implicitContentWidth + leftPadding + rightPadding)
+
+        onAboutToHide: {
+            if (root.visible)
+                root.forceActiveFocus();
+        }
+
+        contentItem: RowLayout {
+            spacing: 11
+            BigscreenUI.KeyNavigationGroup.orientation: Qt.Horizontal
+
+            TvButton {
+                id: liveButton
+                text: qsTr("Return to live")
+                icon.name: "media-skip-forward"
+                onActivated: {
+                    livePanel.close();
+                    root.player.goLive();
+                    root.flash(qsTr("Live"));
+                }
+            }
+            // Recording the rewind window comes with the recording feature.
+            TvButton {
+                text: qsTr("Record")
+                icon.name: "media-record"
+                available: false
+            }
+        }
+    }
+
+    // --- Position while jumping ---------------------------------------------
+    Rectangle {
+        id: jumpBar
+        function show() {
+            visible = true;
+            jumpBarTimer.restart();
+        }
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 43
+        width: Math.min(parent.width - 2 * Theme.margin, 1067)
+        height: 80
+        radius: Theme.radius
+        color: Kirigami.Theme.backgroundColor
+        opacity: 0.9
+        visible: false
+
+        Timer {
+            id: jumpBarTimer
+            interval: 3000
+            onTriggered: jumpBar.visible = false
+        }
+
+        BigscreenUI.ProgressBar {
+            id: jumpProgress
+            anchors.left: parent.left
+            anchors.right: jumpText.left
+            anchors.margins: 27
+            anchors.verticalCenter: parent.verticalCenter
+            // Live is on the right; the oldest kept moment on the left.
+            value: {
+                const shown = jumpTimer.running ? root.jumpTargetMs : root.player.behindMs;
+                const window = Math.max(1, root.player.windowMs());
+                return 1 - Math.min(shown, window) / window;
+            }
+        }
+        Text {
+            id: jumpText
+            anchors.right: parent.right
+            anchors.rightMargin: 27
+            anchors.verticalCenter: parent.verticalCenter
+            readonly property double shown: jumpTimer.running ? root.jumpTargetMs : root.player.behindMs
+            text: shown > 0 ? "−" + root.formatBehind(shown) : qsTr("Live")
+            color: Kirigami.Theme.textColor
+            font.pixelSize: Theme.fontNormal
+            font.weight: Font.DemiBold
+        }
+    }
+
     // --- Paused / behind live ------------------------------------------------
     BigscreenUI.Badge {
         anchors.right: parent.right
@@ -273,17 +412,27 @@ FocusScope {
         text: qsTr("❚❚  Paused")
     }
 
-    // Watching the recording made while paused: a quiet hint, it stays on the whole time.
-    Kirigami.Icon {
+    // Watching behind live: a quiet hint with the time behind, it stays on the whole time.
+    Row {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: Theme.margin
+        spacing: 8
         visible: root.player.timeshifting && !root.player.paused
-        implicitWidth: 32
-        implicitHeight: 32
-        // Breeze has no clock with an arrow turning back. Drawn white, as it is only shown on video.
-        source: Qt.resolvedUrl("../data/icons/symbolic/behind-live.svg")
         opacity: 0.5
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "−" + root.formatBehind(root.player.behindMs)
+            color: "white"
+            font.pixelSize: Theme.fontSmall
+        }
+        Kirigami.Icon {
+            implicitWidth: 32
+            implicitHeight: 32
+            // Breeze has no clock with an arrow turning back. Drawn white, as it is only shown on video.
+            source: Qt.resolvedUrl("../data/icons/symbolic/behind-live.svg")
+        }
     }
 
     // --- Info bar ---------------------------------------------------------

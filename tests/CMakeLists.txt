@@ -71,6 +71,12 @@ flimmer_add_test(
 )
 
 flimmer_add_test(
+    test_timeshiftbuffer
+    SOURCES ${PROJECT_SOURCE_DIR}/src/timeshiftbuffer.cpp
+    LIBRARIES Qt6::Core
+)
+
+flimmer_add_test(
     test_sourceconfig
     SOURCES
         ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
@@ -83,6 +89,7 @@ flimmer_add_test(
     SOURCES
         ${PROJECT_SOURCE_DIR}/src/streamproxy.cpp
         ${PROJECT_SOURCE_DIR}/src/streambuffer.cpp
+        ${PROJECT_SOURCE_DIR}/src/timeshiftbuffer.cpp
         ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
         ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
     LIBRARIES Qt6::Core Qt6::Network

@@ -19,10 +19,31 @@ Item {
     readonly property alias mediaPlayer: player
     signal notice(string text)
 
-    // Pausing records the channel to a file; resuming plays that file, so the
-    // programme continues where it was paused.
+    // The relay keeps the channel on disk: always while rewinding is on, and from a pause
+    // with it off. Playing from an earlier moment means a new source with that offset.
     property bool paused: false
-    property bool timeshifting: false   // playing the recording instead of live TV
+    // The stream can be played from disk; with rewinding off only after a pause.
+    property bool held: false
+    // How far behind live the current source started, and the time paused since.
+    property double sourceBehindMs: 0
+    property double pausedMs: 0
+    property double pausedAt: 0
+    // Updated by a timer while behind live, for the time shown on screen.
+    property double behindMs: 0
+    readonly property bool timeshifting: behindMs > 0
+    readonly property bool rewindOn: Settings.rewindMinutes > 0
+
+    // A plain pause (nothing kept) can't be caught up with, so it doesn't count.
+    function currentBehindMs() {
+        if (!held)
+            return 0;
+        return sourceBehindMs + pausedMs + (paused ? Date.now() - pausedAt : 0);
+    }
+
+    // The most that can be rewound right now.
+    function windowMs() {
+        return held ? Tvh.rewindWindowMs() : 0;
+    }
 
     function togglePause() {
         if (!active || awaitingUrl)
@@ -31,37 +52,52 @@ Item {
         if (!paused) {
             player.pause();
             paused = true;
+            pausedAt = Date.now();
 
-            if (!timeshifting && !recorder.recording) {
-                recorder.start(player.source, Tvh.channels.get(Tvh.channels.indexOfUuid(channelUuid)).name ?? "");
-            }
+            // With rewinding on everything is kept already; otherwise from now on, if it can be.
+            held = rewindOn ? Tvh.rewindAvailable : (held || Tvh.holdStream());
+            behindMs = currentBehindMs();
 
             return;
         }
 
+        pausedMs += Date.now() - pausedAt;
         paused = false;
 
-        // Without a recording, the paused live stream simply continues.
-        if (timeshifting || !recorder.recording) {
-            player.play();
+        // The player's own connection lost what came meanwhile: continue from disk.
+        if (held && currentBehindMs() > 500) {
+            playFrom(currentBehindMs());
 
             return;
         }
 
-        timeshifting = true;
-        player.source = recorder.url;
         player.play();
     }
 
-    function endTimeshift() {
-        if (timeshifting) {
-            player.stop();
-            player.source = "";
-        }
-
-        recorder.stop();
-        timeshifting = false;
+    // Plays 'ms' behind live, within what was kept. 0 is live.
+    function playFrom(ms) {
+        const behind = Math.max(0, Math.min(ms, windowMs()));
         paused = false;
+        pausedMs = 0;
+        sourceBehindMs = behind;
+        behindMs = behind;
+        player.source = Tvh.timeshiftUrl(behind);
+        player.play();
+    }
+
+    function goLive() {
+        if (held)
+            playFrom(0);
+        else if (paused)
+            togglePause();
+    }
+
+    function endTimeshift() {
+        paused = false;
+        held = false;
+        sourceBehindMs = 0;
+        pausedMs = 0;
+        behindMs = 0;
     }
 
     function play(uuid) {
@@ -102,6 +138,7 @@ Item {
 
     function stop() {
         endTimeshift();
+        Tvh.stopStream();
         reconnect.stop();
         player.stop();
         player.source = "";
@@ -172,8 +209,8 @@ Item {
             if (mediaStatus !== MediaPlayer.EndOfMedia || !root.active || root.paused)
                 return;
 
-            // The recording only ends when it broke off; continue with live TV.
-            if (root.timeshifting) {
+            // Playing from disk only ends when nothing more is kept; continue with live TV.
+            if (root.sourceBehindMs > 0) {
                 root.play(root.channelUuid);
 
                 return;
@@ -184,9 +221,20 @@ Item {
         }
     }
 
-    StreamRecorder {
-        id: recorder
-        onFailed: message => root.notice(message)
+    Timer {
+        interval: 500
+        repeat: true
+        running: root.paused || root.sourceBehindMs > 0
+        onTriggered: root.behindMs = root.currentBehindMs()
+    }
+
+    Connections {
+        target: Tvh
+        // With rewinding on, the window becomes available once the format is known.
+        function onRewindChanged() {
+            if (root.rewindOn && root.active)
+                root.held = root.held || Tvh.rewindAvailable;
+        }
     }
 
     Timer {

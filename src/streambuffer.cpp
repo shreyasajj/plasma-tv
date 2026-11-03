@@ -158,6 +158,11 @@ void StreamBuffer::appendPackets()
         }
 
         readPcr(m_pending.constData() + pos);
+
+        if (m_sink) {
+            m_sink(m_pending.constData() + pos, s_packetSize, m_media / s_pcrPerMs);
+        }
+
         m_queue.append(m_pending.constData() + pos, s_packetSize);
         m_appended += s_packetSize;
         pos += s_packetSize;
@@ -236,9 +241,7 @@ QByteArray StreamBuffer::take(qint64 maxBytes)
         m_head = 0;
     }
 
-    while (m_marks.size() > 1 && m_marks[1].offset <= m_taken) {
-        m_marks.pop_front();
-    }
+    dropMarksBefore(m_taken);
 
     if (size() == 0) {
         m_emptySince = m_clock();
@@ -252,6 +255,61 @@ QByteArray StreamBuffer::drain()
     m_filling = false;
 
     return take(size());
+}
+
+void StreamBuffer::dropMarksBefore(qint64 offset)
+{
+    while (m_marks.size() > 1 && m_marks[1].offset <= offset) {
+        m_marks.pop_front();
+    }
+}
+
+qint64 StreamBuffer::mediaMsAt(qint64 offset) const
+{
+    qint64 media = m_marks.empty() ? m_media : m_marks.front().media;
+
+    for (const Mark &mark : m_marks) {
+        if (mark.offset > offset) {
+            break;
+        }
+
+        media = mark.media;
+    }
+
+    return media / s_pcrPerMs;
+}
+
+void StreamBuffer::replayQueued(const PacketSink &sink) const
+{
+    if (m_format != Format::TransportStream) {
+        return;
+    }
+
+    // The player may have taken part of a packet; start at the next whole one.
+    const qint64 first = (m_taken + s_packetSize - 1) / s_packetSize * s_packetSize;
+
+    for (qint64 offset = first; offset + s_packetSize <= m_appended; offset += s_packetSize) {
+        sink(m_queue.constData() + m_head + (offset - m_taken), s_packetSize, mediaMsAt(offset));
+    }
+}
+
+void StreamBuffer::keepNewest(qint64 maxBytes)
+{
+    if (size() <= maxBytes) {
+        return;
+    }
+
+    qint64 taken = m_appended - maxBytes;
+
+    if (m_format == Format::TransportStream) {
+        taken = (taken + s_packetSize - 1) / s_packetSize * s_packetSize;
+    }
+
+    m_head += taken - m_taken;
+    m_taken = taken;
+    m_queue.remove(0, m_head);
+    m_head = 0;
+    dropMarksBefore(m_taken);
 }
 
 void StreamBuffer::endOfData()
