@@ -179,6 +179,17 @@ public:
         return true;
     }
 
+    [[nodiscard]] StreamProxy::BufferState bufferState() const
+    {
+        if (!liveReader() || m_passThrough) {
+            return {};
+        }
+
+        return {.bufferedMs = m_buffer.bufferedMs(),
+                .targetMs = m_buffer.targetMs(),
+                .filling = m_buffer.filling()};
+    }
+
     [[nodiscard]] StreamProxy::TimeshiftState state() const
     {
         StreamProxy::TimeshiftState state;
@@ -716,6 +727,13 @@ StreamProxy::TimeshiftState StreamProxy::timeshift(const QUrl &relayUrl) const
     const StreamSession *found = session(tokenOf(relayUrl));
 
     return found ? found->state() : TimeshiftState{};
+}
+
+StreamProxy::BufferState StreamProxy::liveBuffer(const QUrl &relayUrl) const
+{
+    const StreamSession *found = session(tokenOf(relayUrl));
+
+    return found ? found->bufferState() : BufferState{};
 }
 
 QUrl StreamProxy::behind(const QUrl &relayUrl, qint64 behindMs)

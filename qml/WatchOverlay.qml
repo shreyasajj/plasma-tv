@@ -30,10 +30,16 @@ FocusScope {
         Tvh.epgRevision;
         return Tvh.channels.get(channelIndex);
     }
+    // Counts every second while the info bar or the jump bar is shown.
+    property double clockMs: Date.now()
+    // The moment on screen, and the oldest one that can be rewound to.
+    readonly property double playingMs: player.paused ? player.scrubAtMs : clockMs - player.behindMs
+    readonly property double oldestMs: player.held ? clockMs - player.windowMs() : clockMs
+    // The programme being watched, which is an earlier one after rewinding past its start.
     readonly property var nowEvent: {
         Tvh.now;
         Tvh.epgRevision;
-        return Tvh.eventAt(shownUuid, Date.now());
+        return Tvh.eventAt(shownUuid, pendingUuid.length > 0 ? clockMs : playingMs);
     }
     readonly property var nextEvent: {
         Tvh.now;
@@ -67,14 +73,44 @@ FocusScope {
         showInfo();
     }
 
+    // Stays on the whole time while paused.
     function showInfo() {
         infoShown = true;
-        infoTimer.restart();
+        jumpBar.visible = false;
+
+        if (player.paused)
+            infoTimer.stop();
+        else
+            infoTimer.restart();
+    }
+
+    // Left, Right, Rewind and Fast Forward: the chosen moment while paused, a jump otherwise.
+    function moveInTime(deltaMs) {
+        if (player.paused) {
+            if (player.scrubBy(deltaMs))
+                showInfo();
+            else if (deltaMs < 0 && player.rewindOn && !player.held)
+                flash(qsTr("Rewind isn't available for this channel"));
+        } else {
+            queueJump(deltaMs);
+        }
     }
 
     function togglePause() {
         player.togglePause();
         showInfo();
+    }
+
+    // The pause buttons have the focus.
+    readonly property bool inPauseButtons: playHereButton.activeFocus || toLiveButton.activeFocus || recordButton.activeFocus
+
+    // From the pause buttons back to the bar, where Left and Right move in time.
+    function focusBar() {
+        // The overlay is a focus scope that would hand the keys back to the button.
+        playHereButton.focus = false;
+        toLiveButton.focus = false;
+        recordButton.focus = false;
+        root.forceActiveFocus();
     }
 
     // "2:30" or "1:02:30".
@@ -101,7 +137,17 @@ FocusScope {
         const oldest = player.rewindOn ? player.windowMs() : player.currentBehindMs();
         jumpTargetMs = Math.max(0, Math.min(oldest, from - deltaMs));
         jumpTimer.restart();
+        // One bar at a time at the bottom.
+        infoShown = false;
         jumpBar.show();
+    }
+
+    // "−2:30 behind live · 6:10 kept", or "6:10 kept" while live; empty with nothing kept.
+    function keptText(behindMs) {
+        if (!player.held)
+            return "";
+        const kept = qsTr("%1 kept").arg(formatBehind(clockMs - oldestMs));
+        return behindMs > 0 ? qsTr("−%1 behind live").arg(formatBehind(behindMs)) + "  ·  " + kept : kept;
     }
 
     function flash(text) {
@@ -138,6 +184,12 @@ FocusScope {
     }
 
     Keys.onPressed: event => {
+        // Keys the pause buttons didn't use stay with them, so the arrows don't zap or jump.
+        if (inPauseButtons) {
+            event.accepted = true;
+            return;
+        }
+
         switch (event.key) {
         case Qt.Key_Up:
         case Qt.Key_ChannelUp:
@@ -145,30 +197,38 @@ FocusScope {
             zap(1);
             break;
         case Qt.Key_Down:
+            // While paused, Down goes to the buttons under the bar.
+            if (player.paused) {
+                showInfo();
+                playHereButton.forceActiveFocus();
+            } else {
+                zap(-1);
+            }
+            break;
         case Qt.Key_ChannelDown:
         case Qt.Key_PageDown:
             zap(-1);
             break;
         case Qt.Key_Left:
-            // While paused, Left and Right move in time instead.
-            if (player.paused && player.held && player.rewindOn)
-                queueJump(-rewindStepMs);
+            // While paused with something kept, Left and Right move the chosen moment.
+            if (player.paused && player.held)
+                moveInTime(-rewindStepMs);
             else
                 openZapList();
             break;
         case Qt.Key_Right:
             if (player.paused && player.held)
-                queueJump(forwardStepMs);
+                moveInTime(forwardStepMs);
             else
                 leave("guide");
             break;
         case Qt.Key_AudioRewind:
         case Qt.Key_R:
-            queueJump(-rewindStepMs);
+            moveInTime(-rewindStepMs);
             break;
         case Qt.Key_AudioForward:
         case Qt.Key_F:
-            queueJump(forwardStepMs);
+            moveInTime(forwardStepMs);
             break;
         case Qt.Key_Info:
         case Qt.Key_I:
@@ -203,8 +263,8 @@ FocusScope {
                 else
                     togglePause();
             } else if (Theme.isBack(event.key)) {
-                if (player.timeshifting)
-                    livePanel.open();
+                if (player.scrubbed)
+                    player.resetScrub();
                 else if (Settings.confirmQuit)
                     quitMenu.open();
                 else if (infoShown)
@@ -230,6 +290,13 @@ FocusScope {
         onTriggered: root.infoShown = false
     }
     Timer {
+        interval: 1000
+        repeat: true
+        triggeredOnStart: true
+        running: root.visible && (root.infoShown || jumpBar.visible)
+        onTriggered: root.clockMs = Date.now()
+    }
+    Timer {
         id: jumpTimer
         interval: 600
         onTriggered: root.player.playFrom(root.jumpTargetMs)
@@ -249,6 +316,12 @@ FocusScope {
                 root.play(root.pendingUuid);
             }
         }
+    }
+
+    // --- Starting or refilling: under everything else ----------------------------
+    LoadingScreen {
+        anchors.fill: parent
+        player: root.player
     }
 
     // --- Error ------------------------------------------------------------
@@ -285,6 +358,11 @@ FocusScope {
         function onNotice(text) {
             root.flash(text);
         }
+        function onPausedChanged() {
+            if (!root.player.paused && root.inPauseButtons)
+                root.focusBar();
+            root.showInfo();
+        }
     }
 
     // --- BACK: quit (BACK again keeps watching) --------------------------------
@@ -317,41 +395,6 @@ FocusScope {
         }
     }
 
-    // --- BACK while behind live: return to live (BACK again keeps watching) -----
-    BigscreenUI.Dialog {
-        id: livePanel
-        title: qsTr("%1 behind live").arg(root.formatBehind(root.player.behindMs))
-        openFocusItem: liveButton
-        width: Math.max(implicitHeaderWidth, implicitContentWidth + leftPadding + rightPadding)
-
-        onAboutToHide: {
-            if (root.visible)
-                root.forceActiveFocus();
-        }
-
-        contentItem: RowLayout {
-            spacing: 11
-            BigscreenUI.KeyNavigationGroup.orientation: Qt.Horizontal
-
-            TvButton {
-                id: liveButton
-                text: qsTr("Return to live")
-                icon.name: "media-skip-forward"
-                onActivated: {
-                    livePanel.close();
-                    root.player.goLive();
-                    root.flash(qsTr("Live"));
-                }
-            }
-            // Recording the rewind window comes with the recording feature.
-            TvButton {
-                text: qsTr("Record")
-                icon.name: "media-record"
-                available: false
-            }
-        }
-    }
-
     // --- Position while jumping ---------------------------------------------
     Rectangle {
         id: jumpBar
@@ -376,26 +419,30 @@ FocusScope {
             onTriggered: jumpBar.visible = false
         }
 
-        BigscreenUI.ProgressBar {
-            id: jumpProgress
+        // Behind live where the presses lead to, while they are added up.
+        readonly property double shownBehindMs: jumpTimer.running ? root.jumpTargetMs : root.player.behindMs
+        readonly property var event: {
+            Tvh.epgRevision;
+            return Tvh.eventAt(root.player.channelUuid, root.clockMs - shownBehindMs);
+        }
+
+        ProgrammeBar {
             anchors.left: parent.left
             anchors.right: jumpText.left
             anchors.margins: 27
             anchors.verticalCenter: parent.verticalCenter
-            // Live is on the right; the oldest kept moment on the left.
-            value: {
-                const shown = jumpTimer.running ? root.jumpTargetMs : root.player.behindMs;
-                const window = Math.max(1, root.player.windowMs());
-                return 1 - Math.min(shown, window) / window;
-            }
+            startMs: jumpBar.event.start ?? 0
+            stopMs: jumpBar.event.stop ?? 0
+            playingMs: root.clockMs - jumpBar.shownBehindMs
+            liveMs: root.clockMs
+            oldestMs: root.oldestMs
         }
         Text {
             id: jumpText
             anchors.right: parent.right
             anchors.rightMargin: 27
             anchors.verticalCenter: parent.verticalCenter
-            readonly property double shown: jumpTimer.running ? root.jumpTargetMs : root.player.behindMs
-            text: shown > 0 ? "−" + root.formatBehind(shown) : qsTr("Live")
+            text: jumpBar.shownBehindMs > 0 ? root.keptText(jumpBar.shownBehindMs) : qsTr("Live") + "  ·  " + root.keptText(0)
             color: Kirigami.Theme.textColor
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -441,7 +488,8 @@ FocusScope {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        height: 253
+        // Room for the pause buttons and their hint.
+        height: root.player.paused ? 373 : 253
         opacity: root.infoShown && !zapPanel.shown ? 1 : 0
         visible: opacity > 0
         Behavior on opacity {
@@ -506,7 +554,8 @@ FocusScope {
             Row {
                 spacing: 16
                 width: parent.width
-                visible: root.nowEvent.start !== undefined
+                // Without guide data it still shows what is kept.
+                visible: root.nowEvent.start !== undefined || root.player.held
                 Text {
                     id: rangeText
                     anchors.verticalCenter: parent.verticalCenter
@@ -514,18 +563,30 @@ FocusScope {
                     color: "#d0d6df"
                     font.pixelSize: Theme.fontSmall
                 }
-                BigscreenUI.ProgressBar {
+                ProgrammeBar {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - rangeText.width - leftText.width - 32
-                    value: root.nowEvent.start !== undefined ? (Tvh.now - root.nowEvent.start) / (root.nowEvent.stop - root.nowEvent.start) : 0
+                    startMs: root.nowEvent.start ?? 0
+                    stopMs: root.nowEvent.stop ?? 0
+                    // While zapping, the other channel's programme as it is now.
+                    playingMs: root.pendingUuid.length > 0 ? root.clockMs : root.playingMs
+                    liveMs: root.clockMs
+                    oldestMs: root.pendingUuid.length > 0 ? root.clockMs : root.oldestMs
                 }
                 Text {
                     id: leftText
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.nowEvent.stop !== undefined ? qsTr("%1 min left").arg(Theme.minutesLeft(root.nowEvent.stop, Tvh.now)) : ""
+                    text: root.nowEvent.stop !== undefined ? qsTr("%1 min left").arg(Theme.minutesLeft(root.nowEvent.stop, root.pendingUuid.length > 0 ? root.clockMs : root.playingMs)) : ""
                     color: "#d0d6df"
                     font.pixelSize: Theme.fontSmall
                 }
+            }
+            Text {
+                width: parent.width
+                visible: text.length > 0
+                text: root.pendingUuid.length > 0 ? "" : root.keptText(root.clockMs - root.playingMs)
+                color: "#d0d6df"
+                font.pixelSize: Theme.fontSmall
             }
             Text {
                 width: parent.width
@@ -534,6 +595,79 @@ FocusScope {
                 color: "#aab3c0"
                 font.pixelSize: Theme.fontSmall
                 elide: Text.ElideRight
+            }
+
+            // --- While paused: play, back to live, record ---
+            Row {
+                spacing: 11
+                topPadding: 11
+                visible: root.player.paused
+
+                TvButton {
+                    id: playHereButton
+                    text: qsTr("Play from here")
+                    icon.name: "media-playback-start"
+                    KeyNavigation.right: toLiveButton.visible ? toLiveButton : null
+                    Keys.onUpPressed: root.focusBar()
+                    Keys.onPressed: event => {
+                        if (Theme.isBack(event.key)) {
+                            root.focusBar();
+                            event.accepted = true;
+                        }
+                    }
+                    onActivated: root.togglePause()
+                }
+                TvButton {
+                    id: toLiveButton
+                    visible: root.player.held
+                    text: qsTr("Return to live")
+                    icon.name: "media-skip-forward"
+                    KeyNavigation.left: playHereButton
+                    KeyNavigation.right: recordButton
+                    Keys.onUpPressed: root.focusBar()
+                    Keys.onPressed: event => {
+                        if (Theme.isBack(event.key)) {
+                            root.focusBar();
+                            event.accepted = true;
+                        }
+                    }
+                    onActivated: {
+                        root.player.goLive();
+                        root.flash(qsTr("Live"));
+                    }
+                }
+                // Recording the rewind window comes with the recording feature.
+                TvButton {
+                    id: recordButton
+                    visible: root.player.held
+                    text: qsTr("Record")
+                    icon.name: "media-record"
+                    available: false
+                    KeyNavigation.left: toLiveButton
+                    Keys.onUpPressed: root.focusBar()
+                    Keys.onPressed: event => {
+                        if (Theme.isBack(event.key)) {
+                            root.focusBar();
+                            event.accepted = true;
+                        }
+                    }
+                }
+            }
+            Text {
+                visible: root.player.paused
+                text: {
+                    if (root.inPauseButtons)
+                        return qsTr("↑ back to the bar");
+                    const parts = [];
+                    if (root.player.held)
+                        parts.push(qsTr("←/→ move"));
+                    parts.push(qsTr("↓ buttons"), qsTr("OK play"));
+                    if (root.player.scrubbed)
+                        parts.push(qsTr("BACK reset"));
+                    return parts.join("   ");
+                }
+                color: "#aab3c0"
+                font.pixelSize: Theme.fontSmall
             }
         }
 

@@ -667,6 +667,35 @@ private Q_SLOTS:
         QCOMPARE(behind.body(), data.mid(offsetOf(0, 1000)));
     }
 
+    void reportsTheLiveBufferWhileItFills()
+    {
+        FakeServer server([&](QTcpSocket *socket, const QByteArray &, int) {
+            ok(socket);
+            socket->write(channel(0, 2000));
+        });
+        StreamProxy proxy;
+        proxy.setTiming(patient());
+        const QUrl url = proxy.relay(server.url(), {}, {}, 5);
+        QCOMPARE(proxy.liveBuffer(url).targetMs, 0);
+
+        auto live = std::make_unique<Player>(url);
+        QVERIFY(QTest::qWaitFor([&]() {
+            return proxy.liveBuffer(url).bufferedMs >= 2000;
+        }));
+        const StreamProxy::BufferState state = proxy.liveBuffer(url);
+        QVERIFY(state.filling);
+        QCOMPARE(state.targetMs, 5000);
+        // Held back until 5 s are there.
+        QVERIFY(live->body().isEmpty());
+
+        live->close();
+        QVERIFY(live->waitClosed());
+        live.reset();
+        QVERIFY(QTest::qWaitFor([&]() {
+            return proxy.liveBuffer(url).targetMs == 0;
+        }));
+    }
+
     void sessionWithoutRewindEndsWithThePlayer()
     {
         FakeServer server([&](QTcpSocket *socket, const QByteArray &, int) {

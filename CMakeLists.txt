@@ -175,6 +175,8 @@ qt_add_qml_module(flimmer
         qml/GuidePage.qml
         qml/SettingsPage.qml
         qml/SourceEditor.qml
+        qml/LoadingScreen.qml
+        qml/ProgrammeBar.qml
         qml/TvButton.qml
         qml/TextEntryDialog.qml
         qml/EventDialog.qml
