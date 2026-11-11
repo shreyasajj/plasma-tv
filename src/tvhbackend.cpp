@@ -608,6 +608,13 @@ void TvhBackend::requestStream(const QString &uuid)
     state->source->requestStream(ChannelId::ownOf(uuid));
 }
 
+void TvhBackend::explainStreamError(const QString &uuid)
+{
+    if (const SourceState *state = stateOfChannel(uuid)) {
+        state->source->explainStreamError(ChannelId::ownOf(uuid));
+    }
+}
+
 void TvhBackend::playStream(const QString &uuid, const Source::StreamTarget &target)
 {
     // HLS is fetched segment by segment by the player, which already buffers it. One that needs
@@ -620,11 +627,12 @@ void TvhBackend::playStream(const QString &uuid, const Source::StreamTarget &tar
 
     // Every other stream goes through the relay: it buffers, reconnects without the player
     // noticing and keeps credentials out of the media URL.
-    const QUrl url = m_streamProxy->relay(target.url,
-                                          target.username,
-                                          target.password,
-                                          AppSettings::instance()->playbackBuffer(),
-                                          target.headers);
+    const QUrl url = m_streamProxy->relay({.url = target.url,
+                                           .username = target.username,
+                                           .password = target.password,
+                                           .bufferMode = AppSettings::instance()->playbackBuffer(),
+                                           .headers = target.headers,
+                                           .secretUrl = target.secretUrl});
 
     if (url.isEmpty()) {
         Q_EMIT streamFailed(uuid, tr("The local stream relay could not be started"));

@@ -73,7 +73,7 @@ SourceSettings::SourceSettings(QSettings *settings, SecretStore *store, QObject 
 
 QStringList SourceSettings::types()
 {
-    return {SourceConfig::Tvheadend, SourceConfig::M3u};
+    return {SourceConfig::Tvheadend, SourceConfig::M3u, SourceConfig::Xtream};
 }
 
 QString SourceSettings::typeName(const QString &type)
@@ -84,6 +84,10 @@ QString SourceSettings::typeName(const QString &type)
 
     if (type == SourceConfig::M3u) {
         return tr("M3U + XMLTV");
+    }
+
+    if (type == SourceConfig::Xtream) {
+        return tr("Xtream Codes");
     }
 
     return type;

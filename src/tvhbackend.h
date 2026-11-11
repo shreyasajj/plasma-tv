@@ -127,6 +127,8 @@ public:
     Q_INVOKABLE [[nodiscard]] QVariantMap eventById(double id) const;
 
     Q_INVOKABLE void requestStream(const QString &uuid);
+    // Playing a channel failed for good; its source may emit streamFailed() with the reason.
+    Q_INVOKABLE void explainStreamError(const QString &uuid);
     Q_INVOKABLE void record(double eventId);
     Q_INVOKABLE void cancelRecording(double eventId);
 

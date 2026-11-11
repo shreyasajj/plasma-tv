@@ -111,13 +111,25 @@ FocusScope {
                 label: qsTr("Extra headers"),
                 placeholder: qsTr("Name: value, separated by |")
             });
+        } else if (type === "xtream") {
+            list.push({
+                key: "server",
+                kind: "text",
+                label: qsTr("Server address"),
+                placeholder: qsTr("e.g. http://provider.example:8080")
+            }, {
+                key: "userAgent",
+                kind: "text",
+                label: qsTr("User-Agent"),
+                placeholder: qsTr("Flimmer's own")
+            });
         }
 
         list.push({
             key: "username",
             kind: "text",
             label: qsTr("Username"),
-            placeholder: qsTr("none (anonymous)")
+            placeholder: type === "xtream" ? qsTr("required") : qsTr("none (anonymous)")
         }, {
             key: "password",
             kind: "secret",

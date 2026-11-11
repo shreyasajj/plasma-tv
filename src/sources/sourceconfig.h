@@ -20,6 +20,7 @@ struct SourceConfig {
     // Values of 'type'.
     static constexpr QLatin1StringView Tvheadend{"tvheadend"};
     static constexpr QLatin1StringView M3u{"m3u"};
+    static constexpr QLatin1StringView Xtream{"xtream"};
 
     QString id; // "src-3f2a"; prefixes the IDs of the source's channels
     QString type;

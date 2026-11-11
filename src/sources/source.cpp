@@ -23,3 +23,7 @@ void Source::record(const EpgEvent &)
 void Source::cancelRecording(const EpgEvent &)
 {
 }
+
+void Source::explainStreamError(const QString &)
+{
+}

@@ -17,8 +17,8 @@
 #include <QUrl>
 #include <QVector>
 
-// One source of channels and guide data: a TVHeadend server or an M3U
-// playlist. Channel and event IDs a source
+// One source of channels and guide data: a TVHeadend server, an M3U playlist
+// or an Xtream Codes account. Channel and event IDs a source
 // reports are its own; TvhBackend keeps the sources apart.
 class Source : public QObject
 {
@@ -38,11 +38,14 @@ public:
         QString username;
         QString password;
         Headers headers;
+        // The URL itself holds a secret (Xtream puts the password in the path).
+        bool secretUrl = false;
 
         // Must go through the relay even when it is HLS, which the player could fetch itself.
         [[nodiscard]] bool needsRelay() const
         {
-            return !username.isEmpty() || !headers.isEmpty() || !url.userInfo().isEmpty();
+            return secretUrl || !username.isEmpty() || !headers.isEmpty()
+                || !url.userInfo().isEmpty();
         }
     };
 
@@ -78,6 +81,8 @@ public:
     // Only called with capabilities().record.
     virtual void record(const EpgEvent &event);
     virtual void cancelRecording(const EpgEvent &event);
+    // Playing a channel failed for good; a source that can tell why emits streamFailed().
+    virtual void explainStreamError(const QString &channelId);
 
 Q_SIGNALS:
     void serverInfo(const QString &name, const QString &version);

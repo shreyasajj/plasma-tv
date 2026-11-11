@@ -140,9 +140,9 @@ private:
         const QByteArray type = m_reply->header(QNetworkRequest::ContentTypeHeader).toByteArray();
 
         if (isHlsType(type)) {
-            if (m_target.username.isEmpty() && m_target.headers.isEmpty()) {
+            if (m_target.username.isEmpty() && m_target.headers.isEmpty() && !m_target.secretUrl) {
                 // Let the player fetch the playlist and its segments itself: it needs neither a
-                // login nor the source's headers.
+                // login nor the source's headers, and may see the address.
                 const QByteArray location = m_reply->url().toEncoded();
                 dropReply();
                 respond(m_socket, "302 Found", "Location: " + location + "\r\n");
@@ -150,7 +150,8 @@ private:
                 return false;
             }
 
-            // Needs our credentials or headers: relay it unchanged, as there is nothing to buffer.
+            // Needs our credentials or headers, or the address is secret: relay it unchanged, as
+            // there is nothing to buffer.
             // Only the playlist itself goes through the relay: relative segment addresses would
             // resolve against the relay's address and get a 404, and the player fetches absolute
             // ones without credentials. So this only works for playlists with absolute segment
@@ -368,8 +369,13 @@ bool StreamProxy::listen()
 QUrl StreamProxy::relay(const QUrl &upstream,
                         const QString &username,
                         const QString &password,
-                        int bufferMode,
-                        const Headers &headers)
+                        int bufferMode)
+{
+    return relay(
+        {.url = upstream, .username = username, .password = password, .bufferMode = bufferMode});
+}
+
+QUrl StreamProxy::relay(Target target)
 {
     if (!listen()) {
         return {};
@@ -381,15 +387,9 @@ QUrl StreamProxy::relay(const QUrl &upstream,
     const QString token = QString::fromLatin1(
         QByteArray(reinterpret_cast<const char *>(random), sizeof(random)).toHex());
 
-    Target target{.url = upstream,
-                  .username = username,
-                  .password = password,
-                  .bufferMode = bufferMode,
-                  .headers = headers};
-
-    if (!upstream.userName().isEmpty()) {
-        target.username = upstream.userName();
-        target.password = upstream.password();
+    if (!target.url.userName().isEmpty()) {
+        target.username = target.url.userName();
+        target.password = target.url.password();
         target.url.setUserInfo(QString());
     }
 

@@ -55,6 +55,12 @@ QString describeError(const QNetworkReply *reply, int status)
         return QObject::tr("Connection refused – is the server running on that port?");
     }
 
+    // Qt's own text for these holds the whole address, and with it the password some sources
+    // put there.
+    if (status >= 400) {
+        return QObject::tr("The server answered with an error (%1)").arg(status);
+    }
+
     return reply->errorString();
 }
 

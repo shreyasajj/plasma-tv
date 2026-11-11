@@ -38,15 +38,26 @@ public:
 
     using Headers = QList<QPair<QByteArray, QByteArray>>;
 
-    // Returns a local address for 'upstream'. The credentials are answered to the server's
-    // challenges; ones in the URL are used instead and removed from it. The extra 'headers'
-    // (e.g. a User-Agent) go with every request, reconnects included. 'bufferMode' is a
-    // StreamBuffer mode. An empty URL means the relay could not be started.
-    QUrl relay(const QUrl &upstream,
-               const QString &username,
-               const QString &password,
-               int bufferMode,
-               const Headers &headers = {});
+    struct Target {
+        QUrl url;
+        // Answered to the server's challenges.
+        QString username;
+        QString password;
+        // A StreamBuffer mode.
+        int bufferMode = 0;
+        // Sent with every request, reconnects included (e.g. a User-Agent).
+        Headers headers;
+        // The address itself holds a secret (Xtream puts the password in its path), so the
+        // player is never sent there, not even for HLS.
+        bool secretUrl = false;
+    };
+
+    // Returns a local address for 'target'. Credentials in its URL are used instead of
+    // 'username' and 'password' and removed from it. An empty URL means the relay could not be
+    // started.
+    QUrl relay(Target target);
+    QUrl
+    relay(const QUrl &upstream, const QString &username, const QString &password, int bufferMode);
 
     // HLS playlists are fetched by the player itself: relative segment addresses
     // wouldn't resolve against the relay.
@@ -57,14 +68,6 @@ public:
     {
         m_timing = timing;
     }
-
-    struct Target {
-        QUrl url;
-        QString username;
-        QString password;
-        int bufferMode = 0;
-        Headers headers;
-    };
 
 private:
     bool listen();

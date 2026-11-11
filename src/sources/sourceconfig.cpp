@@ -26,6 +26,12 @@ bool SourceConfig::isValid() const
         return serverConfig().isValid();
     }
 
+    if (type == Xtream) {
+        return QUrl::fromUserInput(field(QStringLiteral("server"))).isValid()
+            && !field(QStringLiteral("server")).trimmed().isEmpty()
+            && !field(QStringLiteral("username")).isEmpty();
+    }
+
     return false;
 }
 
@@ -111,7 +117,8 @@ void SourceConfig::apply(const QVariantMap &values)
     }
 
     // Like today: without a username there is no password.
-    if ((type == Tvheadend || type == M3u) && field(QStringLiteral("username")).isEmpty()) {
+    if ((type == Tvheadend || type == M3u || type == Xtream)
+        && field(QStringLiteral("username")).isEmpty()) {
         secrets.remove(QStringLiteral("password"));
     }
 }

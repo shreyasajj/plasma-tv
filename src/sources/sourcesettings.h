@@ -54,7 +54,7 @@ public:
     [[nodiscard]] SourceConfig config(const QString &id) const;
     [[nodiscard]] QVariantList sources() const;
     static QStringList types();
-    // What the Settings page calls a type, e.g. "M3U + XMLTV".
+    // What the Settings page calls a type, e.g. "Xtream Codes".
     Q_INVOKABLE static QString typeName(const QString &type);
     // At least one enabled source.
     [[nodiscard]] bool configured() const;

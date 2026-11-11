@@ -288,6 +288,25 @@ private Q_SLOTS:
         QVERIFY(player.head().contains("Location: " + server.url().toEncoded()));
     }
 
+    void secretHlsAddressIsNotHandedOut()
+    {
+        const QByteArray playlist = "#EXTM3U\n#EXT-X-VERSION:3\n";
+        FakeServer server([&](QTcpSocket *socket, const QByteArray &, int) {
+            ok(socket, "application/vnd.apple.mpegurl", playlist.size());
+            socket->write(playlist);
+            socket->disconnectFromHost();
+        });
+        StreamProxy proxy;
+        Player player(proxy.relay(
+            {.url = server.url(QStringLiteral("/live/user/secret/1.m3u8")), .secretUrl = true}));
+
+        QVERIFY(player.waitClosed());
+        // Relayed instead of redirected, so the player never sees the address.
+        QVERIFY(player.head().startsWith("HTTP/1.1 200"));
+        QVERIFY(!player.response.contains("secret"));
+        QCOMPARE(player.body(), playlist);
+    }
+
     void detectsHlsByPath()
     {
         QVERIFY(StreamProxy::isHls(QUrl(QStringLiteral("http://a/live/1.m3u8?token=x"))));

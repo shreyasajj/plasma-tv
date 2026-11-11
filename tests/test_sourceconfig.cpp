@@ -78,6 +78,17 @@ private Q_SLOTS:
         QVERIFY(config.secrets.isEmpty());
     }
 
+    void noXtreamPasswordWithoutUser()
+    {
+        SourceConfig config;
+        config.type = SourceConfig::Xtream;
+        config.apply({{QStringLiteral("server"), QStringLiteral("http://panel.local:8080")},
+                      {QStringLiteral("username"), QString()},
+                      {QStringLiteral("password"), QStringLiteral("x")}});
+
+        QVERIFY(config.secrets.isEmpty());
+    }
+
     void newIdsLookRight()
     {
         const QString id = SourceConfig::newId();

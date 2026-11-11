@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+  <channel id="BBC1.uk"><display-name>BBC One</display-name></channel>
+  <channel id="daserste.de"><display-name>Das Erste</display-name></channel>
+  <programme start="20300101100000 +0000" stop="20300101110000 +0000" channel="BBC1.uk"><title>News</title></programme>
+  <programme start="20300101100000 +0000" stop="20300101120000 +0000" channel="daserste.de"><title>Tagesschau</title></programme>
+</tv>
