@@ -149,7 +149,9 @@ qt_add_qml_module(flimmer
         src/epgstore.h src/epgstore.cpp
         src/channelmodel.h src/channelmodel.cpp
         src/sources/sourceconfig.h src/sources/sourceconfig.cpp
+        src/sources/headers.h src/sources/headers.cpp
         src/sources/source.h src/sources/source.cpp
+        src/sources/sourcefactory.cpp
         src/sources/channelid.h src/sources/channelid.cpp
         src/sources/secretstore.h src/sources/secretstore.cpp
         src/sources/sourcesettings.h src/sources/sourcesettings.cpp

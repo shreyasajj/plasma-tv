@@ -14,8 +14,11 @@ M3uSource::M3uSource(const SourceConfig &config, QObject *parent)
     : Source(config, parent)
     , m_api(new TvhApi(this))
     , m_server(config.serverConfig())
+    , m_headers(HttpHeaders::parse(config.field(QStringLiteral("userAgent")),
+                                   config.field(QStringLiteral("headers"))))
 {
     m_api->setServer(m_server);
+    m_api->setHeaders(m_headers);
 }
 
 QString M3uSource::identity() const
@@ -130,14 +133,15 @@ void M3uSource::requestStream(const QString &channelId)
     // URL, so streams from the playlist's own server go through the local relay.
     if (!m_server.username.isEmpty() && url.userName().isEmpty()
         && url.host() == m_server.baseUrl().host()) {
-        Q_EMIT streamReady(
-            channelId,
-            {.url = url, .username = m_server.username, .password = m_server.password});
-
+        Q_EMIT streamReady(channelId,
+                           {.url = url,
+                            .username = m_server.username,
+                            .password = m_server.password,
+                            .headers = m_headers});
         return;
     }
 
-    Q_EMIT streamReady(channelId, {.url = url});
+    Q_EMIT streamReady(channelId, {.url = url, .headers = m_headers});
 }
 
 void M3uSource::test()

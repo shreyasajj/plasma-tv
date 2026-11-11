@@ -100,6 +100,16 @@ FocusScope {
                 kind: "text",
                 label: qsTr("Guide (XMLTV)"),
                 placeholder: qsTr("from the playlist")
+            }, {
+                key: "userAgent",
+                kind: "text",
+                label: qsTr("User-Agent"),
+                placeholder: qsTr("Flimmer's own")
+            }, {
+                key: "headers",
+                kind: "text",
+                label: qsTr("Extra headers"),
+                placeholder: qsTr("Name: value, separated by |")
             });
         }
 

@@ -6,22 +6,6 @@
 
 #include <utility>
 
-#include "m3usource.h"
-#include "tvheadendsource.h"
-
-Source *Source::create(const SourceConfig &config, QObject *parent)
-{
-    if (config.type == SourceConfig::Tvheadend) {
-        return new TvheadendSource(config, parent);
-    }
-
-    if (config.type == SourceConfig::M3u) {
-        return new M3uSource(config, parent);
-    }
-
-    return nullptr;
-}
-
 Source::Source(SourceConfig config, QObject *parent)
     : QObject(parent)
     , m_config(std::move(config))

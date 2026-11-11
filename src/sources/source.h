@@ -8,6 +8,7 @@
 #define SOURCE_H
 
 #include "epgstore.h"
+#include "headers.h"
 #include "sourceconfig.h"
 
 #include <QList>
@@ -28,7 +29,7 @@ public:
         bool record = false;
     };
 
-    using Headers = QList<QPair<QByteArray, QByteArray>>;
+    using Headers = ::Headers;
 
     // Where to fetch a stream from. TvhBackend relays it when it needs credentials or
     // headers, so the media player never sees them.
