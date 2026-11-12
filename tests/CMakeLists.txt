@@ -166,3 +166,42 @@ target_compile_definitions(
     test_stalker
     PRIVATE FLIMMER_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
 )
+
+flimmer_add_test(
+    test_tvhbackend
+    SOURCES
+        fakeserver.h
+        ${PROJECT_SOURCE_DIR}/src/tvhbackend.cpp
+        ${PROJECT_SOURCE_DIR}/src/appsettings.cpp
+        ${PROJECT_SOURCE_DIR}/src/colorschemes.cpp
+        ${PROJECT_SOURCE_DIR}/src/channelmodel.cpp
+        ${PROJECT_SOURCE_DIR}/src/epgdatabase.cpp
+        ${PROJECT_SOURCE_DIR}/src/epgstore.cpp
+        ${PROJECT_SOURCE_DIR}/src/m3u.cpp
+        ${PROJECT_SOURCE_DIR}/src/xmltv.cpp
+        ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
+        ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/streambuffer.cpp
+        ${PROJECT_SOURCE_DIR}/src/streamproxy.cpp
+        ${PROJECT_SOURCE_DIR}/src/tvhapi.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/channelid.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/headers.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/m3usource.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/secretstore.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/source.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/sourcefactory.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/sourcesettings.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/stalker.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/stalkersource.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/tvheadendsource.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/xtream.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/xtreamsource.cpp
+    LIBRARIES
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Network
+        Qt6::Qml
+        Qt6::Sql
+        Qt6Keychain::Qt6Keychain
+)

@@ -23,7 +23,7 @@ constexpr int s_retryMs = 60 * 1000;
 
 TvhBackend *TvhBackend::instance()
 {
-    static auto s_instance = new TvhBackend;
+    static auto s_instance = new TvhBackend(SourceSettings::instance());
 
     return s_instance;
 }
@@ -35,8 +35,9 @@ TvhBackend *TvhBackend::create(QQmlEngine *, QJSEngine *)
     return self;
 }
 
-TvhBackend::TvhBackend(QObject *parent)
+TvhBackend::TvhBackend(SourceSettings *settings, QObject *parent)
     : QObject(parent)
+    , m_settings(settings)
     , m_channels(new ChannelModel(&m_store, this))
     , m_streamProxy(new StreamProxy(this))
 {
@@ -60,7 +61,6 @@ TvhBackend::TvhBackend(QObject *parent)
     // Guide days or the streaming profile changed.
     connect(AppSettings::instance(), &AppSettings::saved, this, &TvhBackend::refresh);
 
-    const SourceSettings *settings = SourceSettings::instance();
     connect(settings, &SourceSettings::saved, this, &TvhBackend::sourceSaved);
     connect(settings, &SourceSettings::removed, this, &TvhBackend::sourceRemoved);
     connect(settings, &SourceSettings::reordered, this, &TvhBackend::sourcesReordered);
@@ -133,7 +133,7 @@ void TvhBackend::createSources()
 
     m_sources.clear();
 
-    for (const SourceConfig &config : SourceSettings::instance()->configs()) {
+    for (const SourceConfig &config : m_settings->configs()) {
         createSource(config, static_cast<int>(m_sources.size()));
     }
 }
@@ -286,10 +286,10 @@ void TvhBackend::removeSource(const QString &id)
 void TvhBackend::sourceSaved(const QString &id)
 {
     // Replaced by a new source with the new settings, at its place in the list.
-    const SourceConfig config = SourceSettings::instance()->config(id);
+    const SourceConfig config = m_settings->config(id);
     int position = 0;
 
-    for (const SourceConfig &other : SourceSettings::instance()->configs()) {
+    for (const SourceConfig &other : m_settings->configs()) {
         if (other.id == id) {
             break;
         }
@@ -314,7 +314,7 @@ void TvhBackend::sourceSaved(const QString &id)
         loadCache();
     }
 
-    if (created && SourceSettings::instance()->credentialsReady()) {
+    if (created && m_settings->credentialsReady()) {
         refreshSource(*created);
     }
 
@@ -336,7 +336,7 @@ void TvhBackend::sourcesReordered()
 {
     QList<SourceState> ordered;
 
-    for (const SourceConfig &config : SourceSettings::instance()->configs()) {
+    for (const SourceConfig &config : m_settings->configs()) {
         if (const SourceState *found = state(config.id)) {
             ordered.append(*found);
         }
@@ -504,12 +504,12 @@ void TvhBackend::refresh()
 {
     m_retryTimer.stop();
 
-    if (!SourceSettings::instance()->configured() || m_sources.isEmpty()) {
+    if (!m_settings->configured() || m_sources.isEmpty()) {
         setStatus(Unconfigured, tr("Not configured"));
         return;
     }
 
-    if (!SourceSettings::instance()->credentialsReady()) {
+    if (!m_settings->credentialsReady()) {
         return;
     }
 
@@ -545,7 +545,7 @@ void TvhBackend::refreshOffline()
 
 void TvhBackend::testConnection(const QVariantMap &values)
 {
-    Source *source = Source::create(SourceSettings::instance()->draft(values), this);
+    Source *source = Source::create(m_settings->draft(values), this);
 
     if (!source) {
         Q_EMIT connectionTestFinished(false, tr("Unknown kind of source"));

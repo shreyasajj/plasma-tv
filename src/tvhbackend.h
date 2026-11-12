@@ -18,6 +18,7 @@
 #include <qqmlregistration.h>
 
 class ChannelModel;
+class SourceSettings;
 class StreamProxy;
 class QQmlEngine;
 class QJSEngine;
@@ -58,6 +59,9 @@ public:
 
     static TvhBackend *instance();
     static TvhBackend *create(QQmlEngine *, QJSEngine *);
+
+    // Tests pass their own settings; the app uses SourceSettings::instance().
+    explicit TvhBackend(SourceSettings *settings, QObject *parent = nullptr);
 
     [[nodiscard]] ChannelModel *channels() const
     {
@@ -156,8 +160,6 @@ private:
         QString serverVersion;
     };
 
-    explicit TvhBackend(QObject *parent = nullptr);
-
     void createSources();
     void createSource(const SourceConfig &config, int position);
     // Deletes the source with this ID and forgets its state.
@@ -178,6 +180,7 @@ private:
     void setBusy(bool busy);
     void setRecordingState(qint64 eventId, const QString &dvrUuid, const QString &dvrState);
 
+    SourceSettings *m_settings;
     QList<SourceState> m_sources; // enabled sources, in the order of the settings
     ChannelModel *m_channels;
     StreamProxy *m_streamProxy;
