@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 
 import QtQuick
+import QtMultimedia
 import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import org.kde.bigscreen.ui as BigscreenUI
@@ -10,6 +11,7 @@ import Flimmer
 
 QQC2.ApplicationWindow {
     id: window
+    property var bridgeControl
     property bool startWindowed: false
     // "home": navigation + pages, "watch": fullscreen video with OSD
     property string mode: "home"
@@ -157,6 +159,55 @@ QQC2.ApplicationWindow {
         id: player
         anchors.fill: parent
     }
+
+    function publishBridgeState() {
+        const state = player.error.length > 0 ? "error"
+            : !player.active ? "idle"
+            : player.paused ? "paused"
+            : player.mediaPlayer.playbackState === MediaPlayer.PlayingState ? "playing" : "buffering";
+        bridgeControl.publish(player.channelUuid, state, Tvh.busy);
+    }
+
+    Connections {
+        target: window.bridgeControl
+        function onFocusRequested() {
+            window.show();
+            window.raise();
+            window.requestActivate();
+        }
+        function onRequested(command, uuid) {
+            if (command === "select_channel") {
+                // A previous focus-loss resume must not replace the requested channel.
+                window.backgroundResumeUuid = "";
+                backgroundTimer.stop();
+                window.watch(uuid);
+            } else if (command === "stop") {
+                window.backgroundResumeUuid = "";
+                player.stop();
+            } else if ((command === "pause" && !player.paused)
+                       || (command === "play" && player.paused)) {
+                if (player.awaitingUrl) {
+                    window.bridgeControl.acknowledge(false);
+                    return;
+                }
+                player.togglePause();
+            } else {
+                window.bridgeControl.acknowledge(false);
+                return;
+            }
+            window.publishBridgeState();
+            window.bridgeControl.acknowledge(true);
+        }
+    }
+
+    Timer {
+        interval: 500
+        repeat: true
+        running: true
+        onTriggered: window.publishBridgeState()
+    }
+
+    Component.onDestruction: bridgeControl.setReady(false)
 
     // The whole UI is laid out on a 1280x720 canvas and scaled to the screen.
     Item {
@@ -398,6 +449,8 @@ QQC2.ApplicationWindow {
     }
 
     Component.onCompleted: {
+        publishBridgeState();
+        bridgeControl.setReady(true);
         if (Settings.configured) {
             window.goPage("channels", true);
             const index = Tvh.channels.indexOfUuid(Settings.lastChannel);

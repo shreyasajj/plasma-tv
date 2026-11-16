@@ -142,6 +142,8 @@ qt_add_qml_module(flimmer
         src/appsettings.h src/appsettings.cpp
         src/tvhapi.h src/tvhapi.cpp
         src/m3u.h src/m3u.cpp
+        src/channelidentity.h src/channelidentity.cpp
+        src/bridgecontrol.h src/bridgecontrol.cpp
         src/xmltv.h src/xmltv.cpp
         src/streambuffer.h src/streambuffer.cpp
         src/streamproxy.h src/streamproxy.cpp

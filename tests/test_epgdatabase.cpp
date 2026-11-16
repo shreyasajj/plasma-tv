@@ -22,6 +22,7 @@ Channel channel(const QString &uuid, int number, const QString &stream = {})
     result.number = number;
     result.name = uuid.toUpper();
     result.stream = stream;
+    result.controlId = QStringLiteral("control:") + uuid;
 
     return result;
 }
@@ -93,6 +94,7 @@ private Q_SLOTS:
         QCOMPARE(loaded.at(0).uuid, QStringLiteral("s1:b"));
         QCOMPARE(loaded.at(1).name, QStringLiteral("S1:A"));
         QCOMPARE(loaded.at(1).stream, QStringLiteral("http://a/1"));
+        QCOMPARE(loaded.at(1).controlId, QStringLiteral("control:s1:a"));
 
         database.saveChannels(QStringLiteral("s1"), {channel(QStringLiteral("s1:c"), 3)});
         QCOMPARE(database.loadChannels().size(), 1);

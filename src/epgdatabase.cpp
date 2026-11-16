@@ -13,8 +13,8 @@
 
 namespace
 {
-// Version 4 prefixed channel IDs with their source.
-constexpr int s_schemaVersion = 4;
+// Version 5 caches stable automation identities separately from guide keys.
+constexpr int s_schemaVersion = 5;
 // Meta key of a source's identity.
 constexpr QLatin1StringView s_identityKey{"source/%1/identity"};
 
@@ -96,7 +96,7 @@ bool EpgDatabase::open()
             QStringLiteral("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"),
             QStringLiteral(
                 "CREATE TABLE IF NOT EXISTS channels (uuid TEXT PRIMARY KEY, number INTEGER, "
-                "name TEXT, icon TEXT, position INTEGER, stream TEXT)"),
+                "name TEXT, icon TEXT, position INTEGER, stream TEXT, control_id TEXT)"),
             QStringLiteral(
                 "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, channel TEXT NOT NULL, "
                 "start INTEGER NOT NULL, stop INTEGER NOT NULL, title TEXT, subtitle TEXT, summary "
@@ -224,9 +224,9 @@ void EpgDatabase::saveChannels(const QString &sourceId, const QVector<Channel> &
         query.addBindValue(prefix.size());
         query.addBindValue(prefix);
         query.exec();
-        query.prepare(
-            QStringLiteral("INSERT INTO channels (uuid, number, name, icon, position, stream) "
-                           "VALUES (?, ?, ?, ?, ?, ?)"));
+        query.prepare(QStringLiteral(
+            "INSERT INTO channels (uuid, number, name, icon, position, stream, control_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)"));
 
         for (int i = 0; i < channels.size(); ++i) {
             const Channel &channel = channels.at(i);
@@ -236,6 +236,7 @@ void EpgDatabase::saveChannels(const QString &sourceId, const QVector<Channel> &
             query.addBindValue(channel.icon);
             query.addBindValue(i);
             query.addBindValue(channel.stream);
+            query.addBindValue(channel.controlId);
             query.exec();
         }
 
@@ -250,8 +251,8 @@ QVector<Channel> EpgDatabase::loadChannels() const
     runAndWait([this, &result] {
         QSqlQuery query(QSqlDatabase::database(m_connectionName));
 
-        if (!query.exec(QStringLiteral(
-                "SELECT uuid, number, name, icon, stream FROM channels ORDER BY position"))) {
+        if (!query.exec(QStringLiteral("SELECT uuid, number, name, icon, stream, control_id FROM "
+                                       "channels ORDER BY position"))) {
             return;
         }
 
@@ -262,6 +263,7 @@ QVector<Channel> EpgDatabase::loadChannels() const
                 .name = query.value(2).toString(),
                 .icon = query.value(3).toString(),
                 .stream = query.value(4).toString(),
+                .controlId = query.value(5).toString(),
             });
         }
     });

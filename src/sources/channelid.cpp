@@ -52,6 +52,10 @@ QVector<Channel> ChannelId::prefixed(const QString &sourceId, QVector<Channel> c
 {
     for (Channel &channel : channels) {
         channel.uuid = make(sourceId, channel.uuid);
+
+        if (!channel.controlId.isEmpty()) {
+            channel.controlId = make(sourceId, channel.controlId);
+        }
     }
 
     return channels;

@@ -18,6 +18,7 @@ command: flimmer
 # Flatpak only exports icons named after the app ID. The launcher already is.
 rename-icon: flimmer
 finish-args:
+  - --own-name=io.github.jclsn.Flimmer.Control
   - --share=ipc
   - --share=network
   - --socket=wayland

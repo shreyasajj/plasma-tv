@@ -14,6 +14,12 @@ theming and uses Breeze Dark by default.
 * TVHeadend or M3U + XMLTV as the source
 * Navigation with TV remote buttons
 
+## Bigscreen Bridge
+
+The local control endpoint supports acknowledged channel selection, paginated
+browsing, EPG and playback controls without exposing provider credentials. See
+[the interface and build guide](docs/bigscreen-bridge.md).
+
 ## Screenshots
 
 **Watching**: the info bar shows the channel, the current programme with its

@@ -37,6 +37,7 @@ public:
         NowRecordingRole,
         NextTitleRole,
         NextStartRole,
+        NextStopRole,
     };
     Q_ENUM(Role)
 
