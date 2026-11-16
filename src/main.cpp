@@ -3,20 +3,26 @@
 // SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
 
 #include "appsettings.h"
+#include "bridgecontrol.h"
 #include "inputdebug.h"
 #include "logoimageprovider.h"
 #include "remotekeys.h"
+#include "tvhbackend.h"
 #ifdef FLIMMER_DEV_TOOLS
 #include "devscript.h"
 #endif
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QDBusConnection>
+#include <QDBusInterface>
 #include <QDir>
 #include <QIcon>
+#include <QJsonDocument>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QStyleFactory>
+#include <QUuid>
 
 int main(int argc, char *argv[])
 {
@@ -48,6 +54,39 @@ int main(int argc, char *argv[])
 
     parser.addOption(windowed);
     parser.process(app);
+
+    auto bus = QDBusConnection::sessionBus();
+
+    if (!bus.isConnected()) {
+        qWarning("A session bus is required for single-instance control");
+
+        return 1;
+    }
+
+    if (!bus.registerService(BridgeControl::serviceName())) {
+        QDBusInterface existing(BridgeControl::serviceName(),
+                                BridgeControl::objectPath(),
+                                BridgeControl::serviceName(),
+                                bus);
+        const QJsonObject request{
+            {QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces)},
+            {QStringLiteral("command"), QStringLiteral("focus")}};
+        const auto reply =
+            existing.call(QStringLiteral("Execute"),
+                          QString::fromUtf8(QJsonDocument(request).toJson(QJsonDocument::Compact)));
+
+        return reply.type() == QDBusMessage::ErrorMessage ? 1 : 0;
+    }
+
+    BridgeControl bridgeControl(TvhBackend::instance()->channels());
+
+    if (!bus.registerObject(BridgeControl::objectPath(),
+                            &bridgeControl,
+                            QDBusConnection::ExportAllSlots)) {
+        qWarning("Cannot register the local control endpoint");
+
+        return 1;
+    }
 
     // Follow Plasma's look; outside a Plasma session fall back to Breeze explicitly.
     const bool plasmaSession =
@@ -85,7 +124,9 @@ int main(int argc, char *argv[])
 #endif
 
     engine.addImageProvider(QStringLiteral("logo"), new LogoImageProvider);
-    engine.setInitialProperties({{QStringLiteral("startWindowed"), parser.isSet(windowed)}});
+    engine.setInitialProperties(
+        {{QStringLiteral("startWindowed"), parser.isSet(windowed)},
+         {QStringLiteral("bridgeControl"), QVariant::fromValue(&bridgeControl)}});
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,

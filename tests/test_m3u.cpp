@@ -16,6 +16,28 @@ class M3uTest : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
+    static void stableControlIdsKeepLegacyGuideKeys()
+    {
+        const auto first = M3u::parse(
+            "#EXTM3U\n#EXTINF:-1 tvg-id=\"same\",News\nhttp://host/old-token/1\n"
+            "#EXTINF:-1 tvg-id=\"same\",Sports\nhttp://host/old-token/2\n",
+            s_source);
+        const auto reordered = M3u::parse(
+            "#EXTM3U\n#EXTINF:-1 tvg-id=\"same\",Sports\nhttp://host/new-token/2\n"
+            "#EXTINF:-1 tvg-id=\"same\",News\nhttp://host/new-token/1\n",
+            s_source);
+        QCOMPARE(first.channels.at(0).uuid, QStringLiteral("same"));
+        QCOMPARE(first.channels.at(1).uuid, QStringLiteral("same#2"));
+        QVERIFY(!first.channels.at(0).controlId.isEmpty());
+        QCOMPARE(first.channels.at(0).controlId, reordered.channels.at(1).controlId);
+        QCOMPARE(first.channels.at(1).controlId, reordered.channels.at(0).controlId);
+        const auto ambiguous =
+            M3u::parse("#EXTM3U\n#EXTINF:-1,News\nhttp://a/1\n#EXTINF:-1,News\nhttp://a/2\n",
+                       s_source);
+        QVERIFY(ambiguous.channels.at(0).controlId.isEmpty());
+        QVERIFY(ambiguous.channels.at(1).controlId.isEmpty());
+    }
+
     static void looksLikePlaylist()
     {
         QVERIFY(M3u::looksLikePlaylist("#EXTM3U\n"));
