@@ -138,7 +138,11 @@ QJsonObject BridgeControl::snapshot() const
 
 void BridgeControl::setReady(bool ready)
 {
+    if (m_ready == ready) {
+        return;
+    }
     m_ready = ready;
+    Q_EMIT StateChanged();
 }
 
 void BridgeControl::publish(const QString &channelUuid, const QString &state, bool catalogueLoading)
@@ -148,9 +152,15 @@ void BridgeControl::publish(const QString &channelUuid, const QString &state, bo
                              QStringLiteral("paused"),
                              QStringLiteral("buffering"),
                              QStringLiteral("error")};
+    const QString next = states.contains(state) ? state : QStringLiteral("idle");
+    const bool changed =
+        m_catalogueLoading != catalogueLoading || m_channelUuid != channelUuid || m_state != next;
     m_catalogueLoading = catalogueLoading;
     m_channelUuid = channelUuid;
-    m_state = states.contains(state) ? state : QStringLiteral("idle");
+    m_state = next;
+    if (changed) {
+        Q_EMIT StateChanged();
+    }
 }
 
 void BridgeControl::acknowledge(bool accepted)

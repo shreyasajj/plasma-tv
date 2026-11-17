@@ -36,6 +36,8 @@ public Q_SLOTS:
     QString Execute(const QString &payload);
 
 Q_SIGNALS:
+    // Exported on the session bus so listeners need not poll; carries no data.
+    Q_SCRIPTABLE void StateChanged();
     void requested(const QString &command, const QString &channelUuid);
     void focusRequested();
 
