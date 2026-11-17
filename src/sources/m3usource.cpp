@@ -82,7 +82,7 @@ void M3uSource::refresh(int guideDays)
 
 void M3uSource::fetchGuide(int generation, const QUrl &url, const Xmltv::ChannelMap &map)
 {
-    m_api->get(url, [this, generation, map](const ApiResult &result) {
+    m_api->getGuide(url, [this, generation, map](const ApiResult &result) {
         if (generation != m_generation) {
             return;
         }

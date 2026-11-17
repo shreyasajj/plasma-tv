@@ -157,42 +157,45 @@ void TvheadendSource::fetchEpgPage(int generation, int offset)
     form.addQueryItem(QStringLiteral("filter"),
                       QString::fromUtf8(QJsonDocument(filter).toJson(QJsonDocument::Compact)));
 
-    m_api->post(QStringLiteral("api/epg/events/grid"),
-                form,
-                [this, generation, offset, now, end](const ApiResult &result) {
-                    if (generation != m_generation) {
-                        return;
-                    }
+    const QString cacheTag =
+        QStringLiteral("%1:%2:%3").arg(offset).arg(m_guideDays).arg(m_config.guideOffsetMinutes());
+    m_api->postGuide(
+        QStringLiteral("api/epg/events/grid"),
+        form,
+        cacheTag,
+        [this, generation, offset, now, end](const ApiResult &result) {
+            if (generation != m_generation) {
+                return;
+            }
 
-                    if (!result.ok) {
-                        Q_EMIT guideFailed(tr("Loading the TV guide failed: %1").arg(result.error));
+            if (!result.ok) {
+                Q_EMIT guideFailed(tr("Loading the TV guide failed: %1").arg(result.error));
 
-                        return;
-                    }
+                return;
+            }
 
-                    const QJsonDocument document = result.json();
-                    const QJsonArray entries = entriesOf(document);
+            const QJsonDocument document = result.json();
+            const QJsonArray entries = entriesOf(document);
 
-                    for (const auto &value : entries) {
-                        EpgEvent event = EpgEvent::fromJson(value.toObject());
-                        // Filter client side as well in case the server ignored the filter.
-                        if (event.stop > now && event.start < end) {
-                            m_incoming.append(std::move(event));
-                        }
-                    }
+            for (const auto &value : entries) {
+                EpgEvent event = EpgEvent::fromJson(value.toObject());
+                // Filter client side as well in case the server ignored the filter.
+                if (event.stop > now && event.start < end) {
+                    m_incoming.append(std::move(event));
+                }
+            }
 
-                    const int total =
-                        document.object().value(QLatin1String("totalCount")).toInt(-1);
-                    const int fetched = offset + static_cast<int>(entries.size());
-                    const bool more = entries.size() == s_epgPageSize
-                        && (total < 0 || fetched < total) && fetched < s_maxEpgEvents;
+            const int total = document.object().value(QLatin1String("totalCount")).toInt(-1);
+            const int fetched = offset + static_cast<int>(entries.size());
+            const bool more = entries.size() == s_epgPageSize && (total < 0 || fetched < total)
+                && fetched < s_maxEpgEvents;
 
-                    if (more) {
-                        fetchEpgPage(generation, fetched);
-                    } else {
-                        Q_EMIT guideReady(std::exchange(m_incoming, {}));
-                    }
-                });
+            if (more) {
+                fetchEpgPage(generation, fetched);
+            } else {
+                Q_EMIT guideReady(std::exchange(m_incoming, {}));
+            }
+        });
 }
 
 QUrl TvheadendSource::streamUrl(const QString &channelId) const

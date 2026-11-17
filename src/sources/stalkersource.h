@@ -54,7 +54,11 @@ private:
     void handshake(int endpoint, const Done &done);
     void signIn(const Done &done);
     // A request with the token; a token the portal no longer accepts is renewed once.
-    void get(const std::function<QUrl()> &url, const Reply &reply, bool retried = false);
+    void get(const std::function<QUrl()> &url,
+             const Reply &reply,
+             bool retried = false,
+             bool guide = false);
+    void getGuide(const std::function<QUrl()> &url, const Reply &reply);
     void fetchGuidePage(const QString &channelId, const QString &date, int page);
     void setToken(const QString &token);
 

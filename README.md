@@ -143,6 +143,12 @@ default is zero. Enter a whole number between -1440 and 1440, or use Left/Right
 to adjust it in 15-minute steps, then choose *Save & connect*. This correction
 shifts all listings from that source, independently of the display timezone.
 
+Guide downloads are cached on disk for 24 hours and reused after restarting.
+Stalker daily pages are fetched once per channel, date and page during that
+period; newly browsed channels or dates are filled on demand. Automatic guide
+refresh runs daily. *Reload channels & guide* and *Clear guide cache* let you
+request fresh data sooner. Guide offset edits reuse downloaded data when the required provider interval is cached.
+
 ## Remote control
 
 | Key (remote / keyboard)                | Action                                      |

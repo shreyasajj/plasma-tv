@@ -6,14 +6,24 @@
 #include "sources/headers.h"
 #include "sources/m3usource.h"
 
+#include <QFile>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 
 class M3uSourceTest : public QObject
 {
     Q_OBJECT
 
+    QTemporaryDir m_cacheDirectory;
+
 private Q_SLOTS:
+    void initTestCase()
+    {
+        QVERIFY(m_cacheDirectory.isValid());
+        qputenv("XDG_DATA_HOME", QFile::encodeName(m_cacheDirectory.path()));
+    }
+
     void parsesHeaders()
     {
         const Headers headers = HttpHeaders::parse(
@@ -30,7 +40,8 @@ private Q_SLOTS:
     void sendsHeaders()
     {
         FakeServer server([](const FakeServer::Request &) -> FakeServer::Reply {
-            return {.body = "#EXTM3U\n#EXTINF:-1 tvg-id=\"one\",One\nhttp://streams.example/one.ts\n",
+            return {.body =
+                        "#EXTM3U\n#EXTINF:-1 tvg-id=\"one\",One\nhttp://streams.example/one.ts\n",
                     .type = "audio/x-mpegurl"};
         });
 

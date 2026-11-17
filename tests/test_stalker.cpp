@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 
 namespace
@@ -108,7 +109,15 @@ class StalkerTest : public QObject
 {
     Q_OBJECT
 
+    QTemporaryDir m_cacheDirectory;
+
 private Q_SLOTS:
+    void initTestCase()
+    {
+        QVERIFY(m_cacheDirectory.isValid());
+        qputenv("XDG_DATA_HOME", QFile::encodeName(m_cacheDirectory.path()));
+    }
+
     void normalizesMacAddresses()
     {
         QCOMPARE(Stalker::normalizeMac(QStringLiteral("00:1a:79:aa:bb:cc")),

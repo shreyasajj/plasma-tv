@@ -9,6 +9,7 @@
 #include "sources/channelid.h"
 #include "sources/sourcesettings.h"
 #include "streamproxy.h"
+#include "tvhapi.h"
 
 #include <QQmlEngine>
 
@@ -17,7 +18,8 @@
 namespace
 {
 constexpr int s_tickMs = 15 * 1000;
-constexpr int s_epgRefreshMs = 30 * 60 * 1000;
+// Automatic guide downloads are refreshed daily; manual reload remains available.
+constexpr int s_epgRefreshMs = 24 * 60 * 60 * 1000;
 constexpr int s_retryMs = 60 * 1000;
 }
 
@@ -494,6 +496,7 @@ void TvhBackend::updateStatus()
 
 void TvhBackend::clearCache()
 {
+    TvhApi::clearGuideCache();
     m_database.clear();
 
     for (SourceState &state : m_sources) {
@@ -506,6 +509,12 @@ void TvhBackend::clearCache()
     m_lastUpdate = {};
     ++m_epgRevision;
     Q_EMIT epgChanged();
+}
+
+void TvhBackend::reload()
+{
+    TvhApi::clearGuideCache();
+    refresh();
 }
 
 void TvhBackend::refresh()

@@ -100,43 +100,43 @@ void XtreamSource::fetchStreams(int generation)
 
 void XtreamSource::fetchGuide(int generation, const Xmltv::ChannelMap &map)
 {
-    m_api->get(Xtream::guideUrl(m_base, m_user, m_password),
-               [this, generation, map](const ApiResult &result) {
-                   if (generation != m_generation) {
-                       return;
-                   }
+    m_api->getGuide(
+        Xtream::guideUrl(m_base, m_user, m_password),
+        [this, generation, map](const ApiResult &result) {
+            if (generation != m_generation) {
+                return;
+            }
 
-                   if (!result.ok) {
-                       Q_EMIT guideFailed(tr("The TV guide isn't available: %1").arg(result.error));
+            if (!result.ok) {
+                Q_EMIT guideFailed(tr("The TV guide isn't available: %1").arg(result.error));
 
-                       return;
-                   }
+                return;
+            }
 
-                   const qint64 now = m_config.providerTime(QDateTime::currentSecsSinceEpoch());
-                   const qint64 end = now + (static_cast<qint64>(m_guideDays) * 24 * 3600);
+            const qint64 now = m_config.providerTime(QDateTime::currentSecsSinceEpoch());
+            const qint64 end = now + (static_cast<qint64>(m_guideDays) * 24 * 3600);
 
-                   // Like an M3U guide: large, so parsed on a thread of its own.
-                   Xmltv::parseInThread(
-                       this,
-                       result.body,
-                       map,
-                       now,
-                       end,
-                       [this, generation](const QVector<EpgEvent> &events, const QString &error) {
-                           if (generation != m_generation) {
-                               return;
-                           }
+            // Like an M3U guide: large, so parsed on a thread of its own.
+            Xmltv::parseInThread(
+                this,
+                result.body,
+                map,
+                now,
+                end,
+                [this, generation](const QVector<EpgEvent> &events, const QString &error) {
+                    if (generation != m_generation) {
+                        return;
+                    }
 
-                           if (!error.isEmpty()) {
-                               Q_EMIT guideFailed(
-                                   tr("The TV guide isn't available: %1").arg(error));
+                    if (!error.isEmpty()) {
+                        Q_EMIT guideFailed(tr("The TV guide isn't available: %1").arg(error));
 
-                               return;
-                           }
+                        return;
+                    }
 
-                           Q_EMIT guideReady(events);
-                       });
-               });
+                    Q_EMIT guideReady(events);
+                });
+        });
 }
 
 void XtreamSource::requestStream(const QString &channelId)

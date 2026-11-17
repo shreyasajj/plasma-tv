@@ -114,6 +114,8 @@ public:
     }
 
     Q_INVOKABLE void refresh();
+    // Explicit reload bypasses the daily download cache.
+    Q_INVOKABLE void reload();
 
     // values: same keys as Sources.save(); secrets may be omitted to use the stored ones.
     Q_INVOKABLE void testConnection(const QVariantMap &values);

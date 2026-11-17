@@ -472,7 +472,7 @@ FocusScope {
             text: qsTr("Reload channels & guide")
             icon.name: "view-refresh"
             available: Settings.configured && !Tvh.busy
-            onActivated: Tvh.refresh()
+            onActivated: Tvh.reload()
             KeyNavigation.left: root.firstRow
             KeyNavigation.up: saveButton
             KeyNavigation.down: clearButton
@@ -481,6 +481,7 @@ FocusScope {
             id: clearButton
             width: parent.width
             text: qsTr("Clear guide cache")
+            available: !Tvh.busy
             icon.name: "edit-clear-all"
             onActivated: {
                 Tvh.clearCache();

@@ -9,6 +9,7 @@
 
 #include <QFile>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 
 namespace
@@ -31,7 +32,15 @@ class XtreamTest : public QObject
 {
     Q_OBJECT
 
+    QTemporaryDir m_cacheDirectory;
+
 private Q_SLOTS:
+    void initTestCase()
+    {
+        QVERIFY(m_cacheDirectory.isValid());
+        qputenv("XDG_DATA_HOME", QFile::encodeName(m_cacheDirectory.path()));
+    }
+
     void baseUrls()
     {
         QCOMPARE(Xtream::baseUrl(QStringLiteral("panel.example:8080")).toString(),

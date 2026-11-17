@@ -142,6 +142,7 @@ qt_add_qml_module(flimmer
         src/appsettings.h src/appsettings.cpp
         src/guidetimezone.h src/guidetimezone.cpp
         src/tvhapi.h src/tvhapi.cpp
+        src/guidecache.h src/guidecache.cpp
         src/m3u.h src/m3u.cpp
         src/xmltv.h src/xmltv.cpp
         src/streambuffer.h src/streambuffer.cpp

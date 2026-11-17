@@ -66,7 +66,7 @@ QString StalkerSource::identity() const
 void StalkerSource::setToken(const QString &token)
 {
     m_token = token;
-    m_api->setHeaders(Stalker::headers(m_device, m_root, token));
+    m_api->setHeaders(Stalker::headers(m_device, m_root, token), true);
 
     if (token.isEmpty()) {
         m_watchdog.stop();
@@ -167,9 +167,12 @@ void StalkerSource::signIn(const Done &done)
     });
 }
 
-void StalkerSource::get(const std::function<QUrl()> &url, const Reply &reply, bool retried)
+void StalkerSource::get(const std::function<QUrl()> &url,
+                        const Reply &reply,
+                        bool retried,
+                        bool guide)
 {
-    m_api->get(url(), [this, url, reply, retried](const ApiResult &result) {
+    const auto callback = [this, url, reply, retried, guide](const ApiResult &result) {
         if (!Stalker::isAuthFailure(result.httpStatus, result.body)) {
             reply(result);
 
@@ -188,7 +191,7 @@ void StalkerSource::get(const std::function<QUrl()> &url, const Reply &reply, bo
 
         // The token expired: once more with a new one.
         setToken({});
-        connectPortal([this, url, reply, result](const QString &error) {
+        connectPortal([this, url, reply, result, guide](const QString &error) {
             if (!error.isEmpty()) {
                 ApiResult failed = result;
                 failed.ok = false;
@@ -198,9 +201,20 @@ void StalkerSource::get(const std::function<QUrl()> &url, const Reply &reply, bo
                 return;
             }
 
-            get(url, reply, true);
+            get(url, reply, true, guide);
         });
-    });
+    };
+
+    if (guide) {
+        m_api->getGuide(url(), callback);
+    } else {
+        m_api->get(url(), callback);
+    }
+}
+
+void StalkerSource::getGuide(const std::function<QUrl()> &url, const Reply &reply)
+{
+    get(url, reply, false, true);
 }
 
 void StalkerSource::setGuideTimeZone(const QString &id)
@@ -272,7 +286,7 @@ void StalkerSource::refresh(int guideDays)
                 restoreChannels(channels);
                 Q_EMIT channelsReady(channels);
 
-                get(
+                getGuide(
                     [this, guideDays]() {
                         return Stalker::guideUrl(m_endpoint, guideDays * 24);
                     },
@@ -332,7 +346,7 @@ void StalkerSource::requestGuide(const QString &channelId, qint64 from, qint64 t
 void StalkerSource::fetchGuidePage(const QString &channelId, const QString &date, int page)
 {
     const int generation = m_generation;
-    get(
+    getGuide(
         [this, channelId, date, page]() {
             return Stalker::channelGuideUrl(m_endpoint, channelId, date, page);
         },
