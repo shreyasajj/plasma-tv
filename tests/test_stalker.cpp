@@ -395,6 +395,35 @@ private Q_SLOTS:
         QVERIFY(server.requests.last().head.contains("timezone=America/Chicago"));
     }
 
+    void requestsThePreviousProviderDateForPositiveOffsets()
+    {
+        Portal portal;
+        FakeServer server([&portal](const FakeServer::Request &request) {
+            if (request.query(QStringLiteral("action")) == QLatin1String("get_simple_data_table")) {
+                return FakeServer::Reply{.body = fixture(QStringLiteral("epg.json"))};
+            }
+
+            return portal.answer(request);
+        });
+        SourceConfig box = config(server.address());
+        box.apply({{QStringLiteral("guideOffsetMinutes"), 1440}});
+        StalkerSource source(box);
+        QSignalSpy guide(&source, &Source::guideReady);
+        connect(&source, &Source::channelsReady, &source, [&source]() {
+            source.requestStream(QStringLiteral("1"));
+        });
+        source.refresh(1);
+        QTRY_VERIFY(guide.count() > 1);
+        const QString yesterday = QDate::currentDate().addDays(-1).toString(Qt::ISODate);
+        QVERIFY(std::any_of(server.requests.cbegin(),
+                            server.requests.cend(),
+                            [&yesterday](const auto &request) {
+                                return request.query(QStringLiteral("action"))
+                                    == QLatin1String("get_simple_data_table")
+                                    && request.query(QStringLiteral("date")) == yesterday;
+                            }));
+    }
+
     void renewsExpiredToken()
     {
         Portal portal;

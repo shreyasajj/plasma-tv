@@ -4,8 +4,40 @@
 
 #include "sourceconfig.h"
 
+#include "epgstore.h"
+
 #include <QRandomGenerator>
 #include <QUrl>
+
+namespace
+{
+// Limit guide corrections to one day in either direction.
+constexpr int s_maxGuideOffsetMinutes = 24 * 60;
+}
+
+int SourceConfig::guideOffsetMinutes() const
+{
+    return qBound(-s_maxGuideOffsetMinutes,
+                  fields.value(QStringLiteral("guideOffsetMinutes"), 0).toInt(),
+                  s_maxGuideOffsetMinutes);
+}
+
+qint64 SourceConfig::providerTime(qint64 displayTime) const
+{
+    return displayTime - (guideOffsetMinutes() * 60LL);
+}
+
+QVector<EpgEvent> SourceConfig::adjustedGuide(QVector<EpgEvent> events) const
+{
+    const qint64 seconds = guideOffsetMinutes() * 60LL;
+
+    for (EpgEvent &event : events) {
+        event.start += seconds;
+        event.stop += seconds;
+    }
+
+    return events;
+}
 
 QString SourceConfig::newId()
 {
@@ -113,6 +145,10 @@ void SourceConfig::apply(const QVariantMap &values)
             name = it.value().toString().trimmed();
         } else if (key == QLatin1String("enabled")) {
             enabled = it.value().toBool();
+        } else if (key == QLatin1String("guideOffsetMinutes")) {
+            fields.insert(
+                key,
+                qBound(-s_maxGuideOffsetMinutes, it.value().toInt(), s_maxGuideOffsetMinutes));
         } else if (secretList.contains(key)) {
             const QString value = it.value().toString();
 

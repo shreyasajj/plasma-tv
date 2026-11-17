@@ -47,7 +47,7 @@ FocusScope {
             first.forceActiveFocus();
     }
 
-    // Field kinds: text, number, switch, secret (never shown once stored), choice.
+    // Field kinds: text, number, offset (signed minutes), switch, secret and choice.
     function fieldsFor(type) {
         let list = [];
 
@@ -179,6 +179,13 @@ FocusScope {
             label: type === "stalker" ? qsTr("Password (optional)") : qsTr("Password")
         });
 
+        list.push({
+            key: "guideOffsetMinutes",
+            kind: "offset",
+            label: qsTr("Guide offset (minutes)"),
+            fallback: 0
+        });
+
         return list;
     }
 
@@ -206,6 +213,8 @@ FocusScope {
             if (draft[field.key] !== undefined)
                 return draft[field.key].length === 0 ? qsTr("not set") : field.plain ? draft[field.key] : "•".repeat(Math.min(draft[field.key].length, 16));
             return stored[field.key + "Set"] ? (field.plain ? qsTr("stored") : "••••••••") : (field.placeholder ? qsTr("not set, e.g. %1").arg(field.placeholder) : qsTr("not set"));
+        case "offset":
+            return Number(v) === 0 ? qsTr("No change · Left/right adjusts by 15 minutes") : v < 0 ? qsTr("%1 minutes earlier").arg(-v) : qsTr("%1 minutes later").arg(v);
         case "switch":
             return v ? qsTr("On") : qsTr("Off");
         case "choice":
@@ -237,6 +246,17 @@ FocusScope {
             }
         case "secret":
             editText(field.label, "", field.plain ? "text" : "password", v => setValue(field.key, field.plain ? v.trim() : v));
+            break;
+        case "offset":
+            if (step !== undefined) {
+                setValue(field.key, Math.max(-1440, Math.min(1440, Number(value(field.key, 0)) + step * 15)));
+            } else {
+                editText(field.label, String(value(field.key, 0)), "offset", v => {
+                    const minutes = Number(v);
+                    if (v.trim().length > 0 && Number.isInteger(minutes) && Math.abs(minutes) <= 1440)
+                        setValue(field.key, minutes);
+                });
+            }
             break;
         case "number":
             editText(field.label, String(value(field.key, field.fallback)), "number", v => {
@@ -329,13 +349,13 @@ FocusScope {
                 }
 
                 Keys.onLeftPressed: event => {
-                    if (field.kind === "choice")
+                    if (field.kind === "choice" || field.kind === "offset")
                         root.activate(field, -1);
                     else
                         event.accepted = false;
                 }
                 Keys.onRightPressed: {
-                    if (field.kind === "choice")
+                    if (field.kind === "choice" || field.kind === "offset")
                         root.activate(field, 1);
                     else
                         testButton.forceActiveFocus();

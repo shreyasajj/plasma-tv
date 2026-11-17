@@ -137,6 +137,12 @@ Under *Settings → Guide timezone*, **Automatic** uses the TV's timezone. Choos
 another region to override it. The choice is saved and applies to guide times,
 day labels and Stalker guide requests, including daylight saving changes.
 
+Each source also has a *Guide offset (minutes)* setting under *Settings → Sources*.
+Positive values move its listings later; negative values move them earlier. The
+default is zero. Enter a whole number between -1440 and 1440, or use Left/Right
+to adjust it in 15-minute steps, then choose *Save & connect*. This correction
+shifts all listings from that source, independently of the display timezone.
+
 ## Remote control
 
 | Key (remote / keyboard)                | Action                                      |

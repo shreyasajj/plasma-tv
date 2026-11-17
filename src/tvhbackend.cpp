@@ -386,7 +386,14 @@ void TvhBackend::loadCache()
     m_lastUpdate = last > 0 ? QDateTime::fromSecsSinceEpoch(last) : QDateTime();
     const int revision = m_epgRevision;
 
-    m_database.loadEvents(QDateTime::currentSecsSinceEpoch(),
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    qint64 earliest = now;
+
+    for (const SourceState &state : std::as_const(m_sources)) {
+        earliest = qMin(earliest, state.source->config().providerTime(now));
+    }
+
+    m_database.loadEvents(earliest,
                           this,
                           [this, revision, cached](const QVector<EpgEvent> &events) {
                               // Fresh data from the server (or a cleared cache) wins.
@@ -430,7 +437,8 @@ void TvhBackend::mergeEvents()
     QVector<EpgEvent> events;
 
     for (const SourceState &state : std::as_const(m_sources)) {
-        events.append(state.events);
+        // Cache provider timestamps unchanged so edits and restarts cannot apply an offset twice.
+        events.append(state.source->config().adjustedGuide(state.events));
     }
 
     m_store.setEvents(std::move(events));
@@ -674,6 +682,9 @@ void TvhBackend::record(double eventId)
     EpgEvent own = *event;
     own.id = ChannelId::ownEventOf(event->id);
     own.channel = ChannelId::ownOf(event->channel);
+    const SourceConfig &config = stateOfChannel(event->channel)->source->config();
+    own.start = config.providerTime(own.start);
+    own.stop = config.providerTime(own.stop);
     stateOfChannel(event->channel)->source->record(own);
 }
 
@@ -688,6 +699,9 @@ void TvhBackend::cancelRecording(double eventId)
     EpgEvent own = *event;
     own.id = ChannelId::ownEventOf(event->id);
     own.channel = ChannelId::ownOf(event->channel);
+    const SourceConfig &config = stateOfChannel(event->channel)->source->config();
+    own.start = config.providerTime(own.start);
+    own.stop = config.providerTime(own.stop);
     stateOfChannel(event->channel)->source->cancelRecording(own);
 }
 

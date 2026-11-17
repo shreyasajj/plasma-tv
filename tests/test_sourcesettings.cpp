@@ -173,6 +173,27 @@ private Q_SLOTS:
         QCOMPARE(store->reads, 0);
     }
 
+    void persistsSeparateGuideOffsets()
+    {
+        auto s = settings();
+        SourceSettings sources(s.get(), new MemoryStore);
+        const QString first =
+            sources.save({{QStringLiteral("type"), SourceConfig::M3u},
+                          {QStringLiteral("playlistUrl"), QStringLiteral("http://a/playlist")},
+                          {QStringLiteral("guideOffsetMinutes"), -330}});
+        const QString second =
+            sources.save({{QStringLiteral("type"), SourceConfig::M3u},
+                          {QStringLiteral("playlistUrl"), QStringLiteral("http://b/playlist")},
+                          {QStringLiteral("guideOffsetMinutes"), 60}});
+        SourceSettings restored(s.get(), new MemoryStore);
+        QCOMPARE(restored.config(first).guideOffsetMinutes(), -330);
+        QCOMPARE(restored.config(second).guideOffsetMinutes(), 60);
+        QCOMPARE(restored.source(first).value(QStringLiteral("guideOffsetMinutes")).toInt(), -330);
+        restored.save({{QStringLiteral("id"), first}, {QStringLiteral("guideOffsetMinutes"), 0}});
+        QCOMPARE(restored.config(first).guideOffsetMinutes(), 0);
+        QCOMPARE(restored.config(second).guideOffsetMinutes(), 60);
+    }
+
     void savesMovesAndRemoves()
     {
         auto s = settings();

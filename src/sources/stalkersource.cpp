@@ -283,8 +283,10 @@ void StalkerSource::refresh(int guideDays)
 
                         QVector<EpgEvent> events;
 
-                        if (!guide.ok || !Stalker::parseGuide(guide.body, &events)) {
-                            // Some portals disable bulk EPG but still serve daily channel guides.
+                        if (!guide.ok || !Stalker::parseGuide(guide.body, &events)
+                            || m_config.guideOffsetMinutes() != 0) {
+                            // Daily requests also cover programmes shifted outside the bulk guide's
+                            // window.
                             m_guideFallback = true;
                             Q_EMIT guideReady({});
                             const qint64 now = QDateTime::currentSecsSinceEpoch();
@@ -307,11 +309,12 @@ void StalkerSource::requestGuide(const QString &channelId, qint64 from, qint64 t
         return;
     }
 
-    const QList<QDate> dates = GuideTimeZone::dates(from,
-                                                    to,
-                                                    QDateTime::currentSecsSinceEpoch(),
-                                                    m_guideDays,
-                                                    m_guideTimeZone);
+    const QList<QDate> dates =
+        GuideTimeZone::dates(m_config.providerTime(from),
+                             m_config.providerTime(to),
+                             m_config.providerTime(QDateTime::currentSecsSinceEpoch()),
+                             m_guideDays,
+                             m_guideTimeZone);
 
     for (const QDate &day : dates) {
         const QString date = day.toString(Qt::ISODate);

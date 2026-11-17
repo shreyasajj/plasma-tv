@@ -11,7 +11,7 @@ import org.kde.bigscreen.ui as BigscreenUI
 // keyboard (plasma-keyboard), which KWin shows for the focused field.
 BigscreenUI.Dialog {
     id: root
-    property string mode: "text"   // "text" | "password" | "number"
+    property string mode: "text"   // "text" | "password" | "number" | "offset" (signed minutes)
     property var callback: null
     property Item returnFocus: null
 
@@ -58,8 +58,8 @@ BigscreenUI.Dialog {
             id: field
             Layout.fillWidth: true
             echoMode: root.mode === "password" ? TextInput.Password : TextInput.Normal
-            inputMethodHints: root.mode === "number" ? Qt.ImhDigitsOnly : root.mode === "password" ? Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText : Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText | Qt.ImhUrlCharactersOnly
-            validator: root.mode === "number" ? portValidator : null
+            inputMethodHints: root.mode === "offset" ? Qt.ImhFormattedNumbersOnly : root.mode === "number" ? Qt.ImhDigitsOnly : root.mode === "password" ? Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText : Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText | Qt.ImhUrlCharactersOnly
+            validator: root.mode === "offset" ? offsetValidator : root.mode === "number" ? portValidator : null
             onAccepted: root.accept()
             Keys.onDownPressed: root.footer.forceActiveFocus()
             onActiveFocusChanged: {
@@ -75,6 +75,12 @@ BigscreenUI.Dialog {
             color: Theme.textFaint
             wrapMode: Text.Wrap
         }
+    }
+
+    IntValidator {
+        id: offsetValidator
+        bottom: -1440
+        top: 1440
     }
 
     IntValidator {

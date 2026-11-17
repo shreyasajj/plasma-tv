@@ -112,7 +112,7 @@ void XtreamSource::fetchGuide(int generation, const Xmltv::ChannelMap &map)
                        return;
                    }
 
-                   const qint64 now = QDateTime::currentSecsSinceEpoch();
+                   const qint64 now = m_config.providerTime(QDateTime::currentSecsSinceEpoch());
                    const qint64 end = now + (static_cast<qint64>(m_guideDays) * 24 * 3600);
 
                    // Like an M3U guide: large, so parsed on a thread of its own.

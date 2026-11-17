@@ -93,7 +93,7 @@ void M3uSource::fetchGuide(int generation, const QUrl &url, const Xmltv::Channel
             return;
         }
 
-        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        const qint64 now = m_config.providerTime(QDateTime::currentSecsSinceEpoch());
         const qint64 end = now + (static_cast<qint64>(m_guideDays) * 24 * 3600);
 
         // Guides of large playlists are tens of megabytes; keep the UI responsive.

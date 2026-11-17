@@ -12,6 +12,9 @@
 #include <QLatin1StringView>
 #include <QString>
 #include <QVariantMap>
+#include <QVector>
+
+struct EpgEvent;
 
 // Settings of one source of channels, stored in the config file. 'secrets'
 // (passwords, the MAC address of a Stalker portal, …) are kept apart from the
@@ -46,6 +49,10 @@ struct SourceConfig {
         return secrets.value(key).toString();
     }
 
+    // Positive offsets move listings later; negative offsets move them earlier.
+    [[nodiscard]] int guideOffsetMinutes() const;
+    [[nodiscard]] qint64 providerTime(qint64 displayTime) const;
+    [[nodiscard]] QVector<EpgEvent> adjustedGuide(QVector<EpgEvent> events) const;
     [[nodiscard]] bool isValid() const;
 
     // TVHeadend and M3U settings in the form their code uses, and back.

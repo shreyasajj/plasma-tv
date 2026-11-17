@@ -4,6 +4,8 @@
 
 #include "sources/sourceconfig.h"
 
+#include "epgstore.h"
+
 #include <QTest>
 
 class SourceConfigTest : public QObject
@@ -111,6 +113,43 @@ private Q_SLOTS:
                       {QStringLiteral("password"), QStringLiteral("x")}});
 
         QVERIFY(config.secrets.isEmpty());
+    }
+
+    void shiftsOnlyTheConfiguredSource()
+    {
+        SourceConfig corrected;
+        corrected.apply({{QStringLiteral("guideOffsetMinutes"), -330}});
+        SourceConfig unchanged;
+        EpgEvent event;
+        event.id = 12;
+        event.channel = QStringLiteral("410");
+        event.start = 200000;
+        event.stop = 203600;
+        const QVector<EpgEvent> original{event};
+        const auto shifted = corrected.adjustedGuide(original);
+        QCOMPARE(shifted.first().start, 180200);
+        QCOMPARE(shifted.first().stop, 183800);
+        QCOMPARE(shifted.first().id, event.id);
+        QCOMPARE(shifted.first().channel, event.channel);
+        QCOMPARE(original.first().start, 200000);
+        QCOMPARE(unchanged.adjustedGuide(original).first().start, 200000);
+        // Rebuilding the displayed guide from cached provider events never compounds the shift.
+        QCOMPARE(corrected.adjustedGuide(original).first().start, shifted.first().start);
+        QCOMPARE(corrected.providerTime(shifted.first().start), event.start);
+    }
+
+    void boundsOffsetsAndFetchesTheInverseWindow()
+    {
+        SourceConfig config;
+        QCOMPARE(config.guideOffsetMinutes(), 0);
+        config.apply({{QStringLiteral("guideOffsetMinutes"), 90}});
+        QCOMPARE(config.providerTime(20000), 14600);
+        config.apply({{QStringLiteral("guideOffsetMinutes"), 99999}});
+        QCOMPARE(config.guideOffsetMinutes(), 1440);
+        config.apply({{QStringLiteral("guideOffsetMinutes"), -99999}});
+        QCOMPARE(config.guideOffsetMinutes(), -1440);
+        config.apply({{QStringLiteral("guideOffsetMinutes"), QStringLiteral("invalid")}});
+        QCOMPARE(config.guideOffsetMinutes(), 0);
     }
 
     void newIdsLookRight()
