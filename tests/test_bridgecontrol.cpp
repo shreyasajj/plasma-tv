@@ -126,6 +126,26 @@ private Q_SLOTS:
         QVERIFY(!request(QStringLiteral("list_channels")).value(QStringLiteral("ok")).toBool());
     }
 
+    void announcesOnlyRealChanges()
+    {
+        m_control.setReady(true);
+        m_control.publish({}, QStringLiteral("idle"));
+        QSignalSpy changes(&m_control, &BridgeControl::StateChanged);
+        m_control.publish({}, QStringLiteral("idle"));
+        m_control.setReady(true);
+        QCOMPARE(changes.size(), 0);
+        m_control.publish(QStringLiteral("s:current"), QStringLiteral("buffering"));
+        m_control.publish(QStringLiteral("s:current"), QStringLiteral("playing"));
+        m_control.publish(QStringLiteral("s:current"), QStringLiteral("playing"));
+        QCOMPARE(changes.size(), 2);
+        m_control.publish(QStringLiteral("s:current"), QStringLiteral("unknown"));
+        m_control.publish({}, QStringLiteral("idle"), true);
+        m_control.setReady(false);
+        QCOMPARE(changes.size(), 5);
+        m_control.setReady(true);
+        m_control.publish({}, QStringLiteral("idle"));
+    }
+
     void guideAndPagination()
     {
         const qint64 now = QDateTime::currentSecsSinceEpoch();

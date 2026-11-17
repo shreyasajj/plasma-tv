@@ -82,7 +82,8 @@ int main(int argc, char *argv[])
 
     if (!bus.registerObject(BridgeControl::objectPath(),
                             &bridgeControl,
-                            QDBusConnection::ExportAllSlots)) {
+                            QDBusConnection::ExportAllSlots
+                                | QDBusConnection::ExportScriptableSignals)) {
         qWarning("Cannot register the local control endpoint");
 
         return 1;
