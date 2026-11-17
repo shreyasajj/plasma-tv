@@ -70,7 +70,8 @@ QByteArray cookie(const Stalker::Device &device)
     QByteArray value = "mac=" + QUrl::toPercentEncoding(device.mac) + "; stb_lang=en";
 
     if (!device.timezone.isEmpty()) {
-        value += "; timezone=" + QUrl::toPercentEncoding(device.timezone);
+        // Portals may read this cookie literally instead of URL-decoding its IANA ID.
+        value += "; timezone=" + QUrl::toPercentEncoding(device.timezone, "/+");
     }
 
     return value;

@@ -159,7 +159,7 @@ private Q_SLOTS:
         QCOMPARE(header(headers, "X-User-Agent"), QByteArray("Model: MAG254; Link: WiFi"));
         QCOMPARE(
             header(headers, "Cookie"),
-            QByteArray("mac=00%3A1A%3A79%3A00%3A00%3A01; stb_lang=en; timezone=Europe%2FBerlin"));
+            QByteArray("mac=00%3A1A%3A79%3A00%3A00%3A01; stb_lang=en; timezone=Europe/Berlin"));
         QCOMPARE(header(headers, "Referer"), QByteArray("http://portal.example/c/"));
         QCOMPARE(header(headers, "Authorization"), QByteArray("Bearer T"));
 
@@ -167,6 +167,22 @@ private Q_SLOTS:
         QVERIFY(header(Stalker::headers(device, root), "Authorization").isEmpty());
         QVERIFY(header(Stalker::streamHeaders(device, root), "Authorization").isEmpty());
         QVERIFY(!header(Stalker::streamHeaders(device, root), "Cookie").isEmpty());
+    }
+
+    void keepsTimeZoneSeparatorsInCookies()
+    {
+        Stalker::Device device;
+        device.mac = QStringLiteral("00:1A:79:00:00:01");
+        device.timezone = QStringLiteral("Etc/GMT+6");
+        const QUrl root(QStringLiteral("http://portal.example/"));
+        QVERIFY(header(Stalker::headers(device, root), "Cookie").contains("timezone=Etc/GMT+6"));
+
+        // Cookie separators and line breaks must still be escaped.
+        device.timezone = QStringLiteral("UTC; injected=1\r\n");
+        const QByteArray cookie = header(Stalker::headers(device, root), "Cookie");
+        QVERIFY(!cookie.contains("; injected="));
+        QVERIFY(!cookie.contains('\r'));
+        QVERIFY(!cookie.contains('\n'));
     }
 
     void leavesOutEmptyFields()
@@ -370,13 +386,13 @@ private Q_SLOTS:
         QSignalSpy guide(&source, &Source::guideReady);
         source.refresh(1);
         QVERIFY(guide.wait(5000));
-        QVERIFY(server.requests.first().head.contains("timezone=Asia%2FKolkata"));
+        QVERIFY(server.requests.first().head.contains("timezone=Asia/Kolkata"));
 
         source.setGuideTimeZone(QStringLiteral("America/Chicago"));
         source.refresh(1);
         QVERIFY(guide.wait(5000));
         QCOMPARE(portal.tokens, 2);
-        QVERIFY(server.requests.last().head.contains("timezone=America%2FChicago"));
+        QVERIFY(server.requests.last().head.contains("timezone=America/Chicago"));
     }
 
     void renewsExpiredToken()
