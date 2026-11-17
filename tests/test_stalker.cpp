@@ -359,6 +359,26 @@ private Q_SLOTS:
             }));
     }
 
+    void sendsTheSelectedGuideTimeZone()
+    {
+        Portal portal;
+        FakeServer server([&portal](const FakeServer::Request &request) {
+            return portal.answer(request);
+        });
+        StalkerSource source(config(server.address()));
+        source.setGuideTimeZone(QStringLiteral("Asia/Kolkata"));
+        QSignalSpy guide(&source, &Source::guideReady);
+        source.refresh(1);
+        QVERIFY(guide.wait(5000));
+        QVERIFY(server.requests.first().head.contains("timezone=Asia%2FKolkata"));
+
+        source.setGuideTimeZone(QStringLiteral("America/Chicago"));
+        source.refresh(1);
+        QVERIFY(guide.wait(5000));
+        QCOMPARE(portal.tokens, 2);
+        QVERIFY(server.requests.last().head.contains("timezone=America%2FChicago"));
+    }
+
     void renewsExpiredToken()
     {
         Portal portal;

@@ -140,6 +140,7 @@ qt_add_qml_module(flimmer
         src/colorschemes.h src/colorschemes.cpp
         src/networkauth.h src/networkauth.cpp
         src/appsettings.h src/appsettings.cpp
+        src/guidetimezone.h src/guidetimezone.cpp
         src/tvhapi.h src/tvhapi.cpp
         src/m3u.h src/m3u.cpp
         src/xmltv.h src/xmltv.cpp

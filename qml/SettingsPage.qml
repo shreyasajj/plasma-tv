@@ -17,6 +17,10 @@ FocusScope {
     // Draft values, committed with "Save"
     property string dProfile
     property int dDays: 3
+    // Empty = Automatic; other values are IANA timezone IDs.
+    property string dGuideTimeZone: ""
+    readonly property var guideTimeZones: Settings.guideTimeZones
+    readonly property int guideTimeZoneIndex: Math.max(0, guideTimeZones.findIndex(zone => zone.id === dGuideTimeZone))
     // -1 = Auto, 0 = Off, else seconds
     property int dBuffer: 2
     readonly property var bufferModes: [-1, 0, 2, 5, 10]
@@ -29,11 +33,12 @@ FocusScope {
     readonly property bool hasTvheadend: Sources.sources.some(s => s.type === "tvheadend")
     readonly property Item firstRow: sourceRepeater.count > 0 ? sourceRepeater.itemAt(0) : addSourceRow
 
-    readonly property bool dirty: dProfile !== Settings.streamProfile || dDays !== Settings.guideDays || dBuffer !== Settings.playbackBuffer || dStopInBackground !== Settings.stopInBackground || dConfirmQuit !== Settings.confirmQuit || dScheme !== Settings.colorScheme
+    readonly property bool dirty: dProfile !== Settings.streamProfile || dDays !== Settings.guideDays || dGuideTimeZone !== Settings.guideTimeZone || dBuffer !== Settings.playbackBuffer || dStopInBackground !== Settings.stopInBackground || dConfirmQuit !== Settings.confirmQuit || dScheme !== Settings.colorScheme
 
     function load() {
         dProfile = Settings.streamProfile;
         dDays = Settings.guideDays;
+        dGuideTimeZone = Settings.guideTimeZone;
         dBuffer = Settings.playbackBuffer;
         dStopInBackground = Settings.stopInBackground;
         dConfirmQuit = Settings.confirmQuit;
@@ -50,6 +55,7 @@ FocusScope {
         return {
             streamProfile: dProfile,
             guideDays: dDays,
+            guideTimeZone: dGuideTimeZone,
             playbackBuffer: dBuffer,
             stopInBackground: dStopInBackground,
             confirmQuit: dConfirmQuit,
@@ -312,7 +318,31 @@ FocusScope {
                     Keys.onLeftPressed: root.dDays = Math.max(1, root.dDays - 1)
                     Keys.onRightPressed: root.dDays = Math.min(14, root.dDays + 1)
                     KeyNavigation.up: confirmQuitRow
+                    KeyNavigation.down: timeZoneRow
+                }
+                BigscreenUI.ComboBoxDelegate {
+                    id: timeZoneRow
+                    width: parent.width
+                    text: qsTr("Guide timezone")
+                    model: root.guideTimeZones.map(zone => zone.name)
+                    currentIndex: root.guideTimeZoneIndex
+
+                    // Timezone choices must scroll within the TV screen.
+                    Component.onCompleted: {
+                        for (const object of data) {
+                            if (object instanceof T.Dialog)
+                                object.height = Qt.binding(() => Math.min(object.implicitHeight, object.parent.height * 0.9));
+                        }
+                    }
+
+                    onActivated: index => {
+                        root.dGuideTimeZone = root.guideTimeZones[index].id;
+                        currentIndex = Qt.binding(() => root.guideTimeZoneIndex);
+                    }
+
+                    KeyNavigation.up: daysRow
                     KeyNavigation.down: schemeRow
+                    KeyNavigation.right: saveButton
                 }
                 BigscreenUI.ComboBoxDelegate {
                     id: schemeRow
@@ -334,7 +364,7 @@ FocusScope {
                         currentIndex = Qt.binding(() => root.schemeIndex);
                     }
 
-                    KeyNavigation.up: daysRow
+                    KeyNavigation.up: timeZoneRow
                     KeyNavigation.down: saveButton
                     KeyNavigation.right: saveButton
                 }
@@ -410,7 +440,7 @@ FocusScope {
                     font.pixelSize: Theme.fontSmall
                 }
                 Text {
-                    text: Tvh.lastUpdate.getTime() > 0 ? qsTr("Guide updated %1 · %2 channels").arg(Qt.formatDateTime(Tvh.lastUpdate, "dd.MM. HH:mm")).arg(Tvh.channels.count) : qsTr("Guide not loaded yet")
+                    text: Tvh.lastUpdate.getTime() > 0 ? qsTr("Guide updated %1 · %2 channels").arg(Theme.formatDay(Tvh.lastUpdate.getTime()) + " " + Theme.formatTime(Tvh.lastUpdate.getTime())).arg(Tvh.channels.count) : qsTr("Guide not loaded yet")
                     color: Theme.textDim
                     font.pixelSize: Theme.fontSmall
                 }

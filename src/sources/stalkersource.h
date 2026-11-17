@@ -12,6 +12,7 @@
 
 #include <QHash>
 #include <QSet>
+#include <QTimeZone>
 #include <QTimer>
 
 #include <functional>
@@ -31,6 +32,7 @@ public:
 
     [[nodiscard]] QString identity() const override;
 
+    void setGuideTimeZone(const QString &id) override;
     void restoreChannels(const QVector<Channel> &channels) override;
     void refresh(int guideDays) override;
     void requestGuide(const QString &channelId, qint64 from, qint64 to) override;
@@ -62,6 +64,7 @@ private:
     Stalker::Device m_device;
     QString m_token;
     QString m_currentChannel;
+    QTimeZone m_guideTimeZone = QTimeZone::systemTimeZone();
     QHash<QString, QString> m_cmds; // channel ID → cmd for create_link
     QTimer m_watchdog;
     int m_generation = 0;

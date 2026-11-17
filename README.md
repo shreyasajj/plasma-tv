@@ -131,6 +131,12 @@ address, e.g. `http://<host>:9191/output/m3u` for Dispatcharr. The guide address
 can stay empty if the playlist names it in its header. Recordings and streaming
 profiles need TVHeadend.
 
+## Guide timezone
+
+Under *Settings → Guide timezone*, **Automatic** uses the TV's timezone. Choose
+another region to override it. The choice is saved and applies to guide times,
+day labels and Stalker guide requests, including daylight saving changes.
+
 ## Remote control
 
 | Key (remote / keyboard)                | Action                                      |

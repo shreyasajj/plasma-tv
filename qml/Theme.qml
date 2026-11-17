@@ -4,6 +4,7 @@
 
 pragma Singleton
 import QtQuick
+import Flimmer
 import org.kde.kirigami as Kirigami
 import org.kde.bigscreen.ui as BigscreenUI
 
@@ -79,7 +80,8 @@ QtObject {
     }
 
     function formatTime(ms) {
-        return Qt.formatTime(new Date(ms), "HH:mm");
+        Settings.guideTimeZone;
+        return Settings.formatGuideTime(ms);
     }
 
     function formatRange(startMs, stopMs) {
@@ -96,14 +98,8 @@ QtObject {
     }
 
     function formatDay(ms) {
-        const d = new Date(ms);
-        const today = new Date();
-        const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-        if (d.toDateString() === today.toDateString())
-            return qsTr("Today");
-        if (d.toDateString() === tomorrow.toDateString())
-            return qsTr("Tomorrow");
-        return Qt.formatDate(d, "dddd, d MMMM");
+        Settings.guideTimeZone;
+        return Settings.formatGuideDay(ms);
     }
 
     function minutesLeft(stopMs, nowMs) {

@@ -27,6 +27,10 @@ class AppSettings : public QObject
 
     Q_PROPERTY(QString streamProfile READ streamProfile NOTIFY changed)
     Q_PROPERTY(int guideDays READ guideDays NOTIFY changed)
+    // Empty = Auto (the TV's timezone); otherwise an IANA timezone ID.
+    Q_PROPERTY(QString guideTimeZone READ guideTimeZone NOTIFY changed)
+    Q_PROPERTY(QString detectedTimeZone READ detectedTimeZone NOTIFY changed)
+    Q_PROPERTY(QVariantList guideTimeZones READ guideTimeZones CONSTANT)
     // Seconds behind live: -1 = Auto (grows after stalls), 0 = Off, 2 (default), 5 or 10.
     Q_PROPERTY(int playbackBuffer READ playbackBuffer NOTIFY changed)
     Q_PROPERTY(bool stopInBackground READ stopInBackground NOTIFY changed)
@@ -51,6 +55,16 @@ public:
     {
         return m_guideDays;
     }
+
+    [[nodiscard]] QString guideTimeZone() const
+    {
+        return m_guideTimeZone;
+    }
+
+    [[nodiscard]] static QString detectedTimeZone();
+    [[nodiscard]] static QVariantList guideTimeZones();
+    Q_INVOKABLE [[nodiscard]] QString formatGuideTime(double ms) const;
+    Q_INVOKABLE [[nodiscard]] QString formatGuideDay(double ms) const;
 
     [[nodiscard]] int playbackBuffer() const
     {
@@ -96,7 +110,8 @@ public:
 
     void setLastChannel(const QString &uuid);
 
-    // Expected keys: streamProfile, guideDays, playbackBuffer, stopInBackground, confirmQuit and
+    // Expected keys: streamProfile, guideDays, guideTimeZone, playbackBuffer, stopInBackground,
+    // confirmQuit and
     // colorScheme.
     Q_INVOKABLE void save(const QVariantMap &values);
 
@@ -112,6 +127,7 @@ private:
     const SourceSettings *m_sources;
     QString m_streamProfile;
     int m_guideDays = 3;
+    QString m_guideTimeZone;
     int m_playbackBuffer = 2;
     bool m_stopInBackground = true;
     bool m_confirmQuit = true;

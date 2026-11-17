@@ -152,6 +152,7 @@ flimmer_add_test(
         fakeserver.h
         ${PROJECT_SOURCE_DIR}/src/sources/stalker.cpp
         ${PROJECT_SOURCE_DIR}/src/sources/stalkersource.cpp
+        ${PROJECT_SOURCE_DIR}/src/guidetimezone.cpp
         ${PROJECT_SOURCE_DIR}/src/sources/source.cpp
         ${PROJECT_SOURCE_DIR}/src/sources/headers.cpp
         ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
@@ -165,4 +166,28 @@ flimmer_add_test(
 target_compile_definitions(
     test_stalker
     PRIVATE FLIMMER_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data"
+)
+
+flimmer_add_test(
+    test_guidetimezone
+    SOURCES ${PROJECT_SOURCE_DIR}/src/guidetimezone.cpp
+    LIBRARIES Qt6::Core
+)
+
+flimmer_add_test(
+    test_appsettings
+    SOURCES
+        ${PROJECT_SOURCE_DIR}/src/appsettings.h
+        ${PROJECT_SOURCE_DIR}/src/appsettings.cpp
+        ${PROJECT_SOURCE_DIR}/src/colorschemes.cpp
+        ${PROJECT_SOURCE_DIR}/src/guidetimezone.cpp
+        ${PROJECT_SOURCE_DIR}/src/streambuffer.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/sourcesettings.h
+        ${PROJECT_SOURCE_DIR}/src/sources/sourcesettings.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/secretstore.h
+        ${PROJECT_SOURCE_DIR}/src/sources/secretstore.cpp
+        ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
+        ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
+    LIBRARIES Qt6::Core Qt6::Gui Qt6::Network Qt6::Qml Qt6Keychain::Qt6Keychain
 )

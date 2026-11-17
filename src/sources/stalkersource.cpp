@@ -4,6 +4,7 @@
 
 #include "stalkersource.h"
 
+#include "guidetimezone.h"
 #include "tvhapi.h"
 
 #include <QCryptographicHash>
@@ -40,7 +41,7 @@ StalkerSource::StalkerSource(const SourceConfig &config, QObject *parent)
     m_device.signature = config.secret(QStringLiteral("signature"));
     m_device.login = config.field(QStringLiteral("username"));
     m_device.password = config.secret(QStringLiteral("password"));
-    m_device.timezone = QString::fromUtf8(QTimeZone::systemTimeZoneId());
+    m_device.timezone = QString::fromUtf8(m_guideTimeZone.id());
     setToken({});
 
     m_watchdog.setInterval(s_watchdogMs);
@@ -202,6 +203,20 @@ void StalkerSource::get(const std::function<QUrl()> &url, const Reply &reply, bo
     });
 }
 
+void StalkerSource::setGuideTimeZone(const QString &id)
+{
+    const QTimeZone zone = GuideTimeZone::resolve(id);
+
+    if (zone == m_guideTimeZone) {
+        return;
+    }
+
+    m_guideTimeZone = zone;
+    m_device.timezone = QString::fromUtf8(zone.id());
+    // The portal reads the timezone during sign-in, so renew the session after a change.
+    setToken({});
+}
+
 void StalkerSource::restoreChannels(const QVector<Channel> &channels)
 {
     for (const Channel &channel : channels) {
@@ -292,12 +307,13 @@ void StalkerSource::requestGuide(const QString &channelId, qint64 from, qint64 t
         return;
     }
 
-    const QDate today = QDate::currentDate();
-    const QDate first = qMax(today, QDateTime::fromSecsSinceEpoch(from).date());
-    const QDate last =
-        qMin(today.addDays(m_guideDays), QDateTime::fromSecsSinceEpoch(qMax(from, to - 1)).date());
+    const QList<QDate> dates = GuideTimeZone::dates(from,
+                                                    to,
+                                                    QDateTime::currentSecsSinceEpoch(),
+                                                    m_guideDays,
+                                                    m_guideTimeZone);
 
-    for (QDate day = first; day <= last; day = day.addDays(1)) {
+    for (const QDate &day : dates) {
         const QString date = day.toString(Qt::ISODate);
         const QString key = channelId + QLatin1Char(':') + date;
 

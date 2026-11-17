@@ -5,9 +5,11 @@
 #include "appsettings.h"
 
 #include "colorschemes.h"
+#include "guidetimezone.h"
 #include "sources/sourcesettings.h"
 #include "streambuffer.h"
 
+#include <QDateTime>
 #include <QQmlEngine>
 #include <QSettings>
 
@@ -51,6 +53,8 @@ AppSettings::AppSettings(QObject *parent)
 
     m_guideDays =
         qBound(1, settings.value(QStringLiteral("guide/days"), 3).toInt(), kDefaultGuideDays);
+    m_guideTimeZone =
+        GuideTimeZone::normalize(settings.value(QStringLiteral("guide/timeZone")).toString());
     m_playbackBuffer =
         StreamBuffer::normalizeMode(settings.value(QStringLiteral("playback/buffer"), 2).toInt());
 
@@ -62,6 +66,46 @@ AppSettings::AppSettings(QObject *parent)
         settings.value(QStringLiteral("appearance/colorScheme"), ColorSchemes::s_default)
             .toString();
     m_colorSchemes = ColorSchemes::available();
+}
+
+QString AppSettings::detectedTimeZone()
+{
+    return QString::fromUtf8(GuideTimeZone::resolve({}).id());
+}
+
+QVariantList AppSettings::guideTimeZones()
+{
+    QVariantList result;
+    result.append(
+        QVariantMap{{QStringLiteral("id"), QString()},
+                    {QStringLiteral("name"), tr("Automatic (%1)").arg(detectedTimeZone())}});
+    QList<QByteArray> ids = QTimeZone::availableTimeZoneIds();
+    // Keep the detected zone close to Automatic for quick remote navigation.
+    const QByteArray detected = detectedTimeZone().toUtf8();
+    ids.removeAll(detected);
+    ids.prepend(detected);
+
+    for (const QByteArray &id : ids) {
+        result.append(
+            QVariantMap{{QStringLiteral("id"), QString::fromUtf8(id)},
+                        {QStringLiteral("name"),
+                         QString::fromUtf8(id).replace(QLatin1Char('_'), QLatin1Char(' '))}});
+    }
+
+    return result;
+}
+
+QString AppSettings::formatGuideTime(double ms) const
+{
+    return GuideTimeZone::formatTime(static_cast<qint64>(ms),
+                                     GuideTimeZone::resolve(m_guideTimeZone));
+}
+
+QString AppSettings::formatGuideDay(double ms) const
+{
+    return GuideTimeZone::formatDay(static_cast<qint64>(ms),
+                                    QDateTime::currentMSecsSinceEpoch(),
+                                    GuideTimeZone::resolve(m_guideTimeZone));
 }
 
 bool AppSettings::configured() const
@@ -112,6 +156,8 @@ void AppSettings::save(const QVariantMap &values)
     m_guideDays = qBound(1,
                          values.value(QStringLiteral("guideDays"), m_guideDays).toInt(),
                          kDefaultGuideDays);
+    m_guideTimeZone = GuideTimeZone::normalize(
+        values.value(QStringLiteral("guideTimeZone"), m_guideTimeZone).toString());
     m_playbackBuffer = StreamBuffer::normalizeMode(
         values.value(QStringLiteral("playbackBuffer"), m_playbackBuffer).toInt());
     m_stopInBackground =
@@ -122,6 +168,7 @@ void AppSettings::save(const QVariantMap &values)
     QSettings settings;
     settings.setValue(QStringLiteral("playback/profile"), m_streamProfile);
     settings.setValue(QStringLiteral("guide/days"), m_guideDays);
+    settings.setValue(QStringLiteral("guide/timeZone"), m_guideTimeZone);
     settings.setValue(QStringLiteral("playback/buffer"), m_playbackBuffer);
     settings.setValue(QStringLiteral("playback/stopInBackground"), m_stopInBackground);
     settings.setValue(QStringLiteral("playback/confirmQuit"), m_confirmQuit);

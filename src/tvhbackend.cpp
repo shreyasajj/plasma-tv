@@ -57,7 +57,7 @@ TvhBackend::TvhBackend(QObject *parent)
     m_retryTimer.setSingleShot(true);
     connect(&m_retryTimer, &QTimer::timeout, this, &TvhBackend::refreshOffline);
 
-    // Guide days or the streaming profile changed.
+    // Guide settings or the streaming profile changed.
     connect(AppSettings::instance(), &AppSettings::saved, this, &TvhBackend::refresh);
 
     const SourceSettings *settings = SourceSettings::instance();
@@ -529,6 +529,7 @@ void TvhBackend::refreshSource(SourceState &state)
         state.statusText = tr("Connecting to %1…").arg(state.source->config().name);
     }
 
+    state.source->setGuideTimeZone(AppSettings::instance()->guideTimeZone());
     state.source->refresh(AppSettings::instance()->guideDays());
 }
 

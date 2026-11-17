@@ -31,3 +31,7 @@ void Source::explainStreamError(const QString &)
 void Source::requestGuide(const QString &, qint64, qint64)
 {
 }
+
+void Source::setGuideTimeZone(const QString &)
+{
+}

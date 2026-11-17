@@ -71,6 +71,8 @@ public:
     // Changes when the cached channels and guide of this source become invalid.
     [[nodiscard]] virtual QString identity() const = 0;
 
+    // Uses the selected guide timezone for provider requests; empty follows the TV.
+    virtual void setGuideTimeZone(const QString &id);
     // Channels from the cache, before the first refresh() reports fresh ones.
     virtual void restoreChannels(const QVector<Channel> &channels);
     // Logs in, then reports the channels and the guide of the next 'guideDays' days.
