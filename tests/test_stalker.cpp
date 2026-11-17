@@ -229,6 +229,7 @@ private Q_SLOTS:
         // The channel without a cmd can't be played and is left out.
         QCOMPARE(channels.size(), 2);
         QCOMPARE(channels.at(0).uuid, QStringLiteral("1"));
+        QCOMPARE(channels.at(0).controlId, QStringLiteral("1"));
         QCOMPARE(channels.at(0).number, 1);
         QCOMPARE(channels.at(0).stream, QStringLiteral("ffmpeg http://localhost/ch/1_"));
         QCOMPARE(channels.at(0).icon,

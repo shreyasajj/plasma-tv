@@ -190,6 +190,8 @@ bool Xtream::parseStreams(const QByteArray &data, Streams *streams)
 
         Channel channel;
         channel.uuid = id;
+        // The provider's stream ID stays the same across refreshes, so automations may rely on it.
+        channel.controlId = id;
         channel.number = static_cast<int>(number(object.value(QLatin1String("num"))));
         channel.name = text(object.value(QLatin1String("name"))).trimmed();
         channel.icon = text(object.value(QLatin1String("stream_icon")));
