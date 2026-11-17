@@ -7,20 +7,29 @@
 #include "networkauth.h"
 #include "streambuffer.h"
 
+#include <QCryptographicHash>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
 
+#include <functional>
+#include <ranges>
 #include <utility>
 
 namespace
 {
+// Keep recent channel selections available for player retries.
 constexpr int s_maxTargets = 8;
+// Retain playlist resources across reloads without growing for the whole broadcast.
+constexpr int s_maxResources = 512;
+// A playlist must fit in memory before its addresses can be rewritten.
+constexpr qsizetype s_maxPlaylistBytes = 1024 * 1024LL;
 constexpr qsizetype s_maxRequestSize = static_cast<const qsizetype>(16 * 1024);
 // Read from the server only while the buffer has room, so memory stays bounded.
 constexpr qint64 s_readBufferSize = static_cast<const qint64>(1024 * 1024);
@@ -63,13 +72,16 @@ public:
     Session(QTcpSocket *socket,
             const StreamProxy::Target &target,
             StreamProxy::Timing timing,
-            QNetworkAccessManager *networkManager)
+            QNetworkAccessManager *networkManager,
+            std::function<QUrl(const QUrl &)> relayResource)
         : QObject(socket)
         , m_socket(socket)
         , m_target(target)
         , m_timing(std::move(timing))
         , m_networkManager(networkManager)
         , m_buffer(target.bufferMode)
+        , m_relayResource(std::move(relayResource))
+        , m_passThrough(target.finite)
     {
         m_stallTimer.setSingleShot(true);
         m_retryTimer.setSingleShot(true);
@@ -150,12 +162,8 @@ private:
                 return false;
             }
 
-            // Needs our credentials or headers, or the address is secret: relay it unchanged, as
-            // there is nothing to buffer.
-            // Only the playlist itself goes through the relay: relative segment addresses would
-            // resolve against the relay's address and get a 404, and the player fetches absolute
-            // ones without credentials. So this only works for playlists with absolute segment
-            // addresses on hosts that need no login for them.
+            // Resolve child playlists, segments and keys against the final upstream address.
+            m_playlist = true;
             m_passThrough = true;
         }
 
@@ -188,7 +196,16 @@ private:
                     m_attempts = 0;
                 }
 
-                if (m_passThrough) {
+                if (m_playlist) {
+                    m_playlistData.append(data);
+
+                    if (m_playlistData.size() > s_maxPlaylistBytes) {
+                        dropReply();
+                        m_socket->disconnectFromHost();
+
+                        return;
+                    }
+                } else if (m_passThrough) {
                     m_socket->write(data);
                 } else {
                     m_buffer.append(data);
@@ -240,6 +257,19 @@ private:
         // What the reply still holds belongs before the gap, unless it is an error page.
         const QByteArray rest = succeeded(reply) ? reply->readAll() : QByteArray();
 
+        if (m_playlist) {
+            m_playlistData.append(rest);
+
+            if (reply->error() == QNetworkReply::NoError
+                && m_playlistData.size() <= s_maxPlaylistBytes) {
+                m_socket->write(rewritePlaylist(reply->url()));
+            }
+
+            m_socket->disconnectFromHost();
+
+            return;
+        }
+
         if (m_passThrough) {
             m_socket->write(rest);
             m_socket->disconnectFromHost();
@@ -266,6 +296,43 @@ private:
         }
 
         reconnect();
+    }
+
+    QByteArray rewritePlaylist(const QUrl &base)
+    {
+        QStringList lines = QString::fromUtf8(m_playlistData).split(QLatin1Char('\n'));
+        const QRegularExpression uri(QStringLiteral("URI=\"([^\"]+)\""));
+
+        for (QString &line : lines) {
+            const QString trimmed = line.trimmed();
+
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+
+            if (!trimmed.startsWith(QLatin1Char('#'))) {
+                line = m_relayResource(base.resolved(QUrl(trimmed))).toString(QUrl::FullyEncoded);
+
+                continue;
+            }
+
+            // Keys and initialization segments carry their address in a tag attribute.
+            auto matches = uri.globalMatch(line);
+            QList<QRegularExpressionMatch> found;
+
+            while (matches.hasNext()) {
+                found.append(matches.next());
+            }
+
+            for (const QRegularExpressionMatch &match :
+                 std::as_const(found) | std::views::reverse) {
+                const QString local = m_relayResource(base.resolved(QUrl(match.captured(1))))
+                                          .toString(QUrl::FullyEncoded);
+                line.replace(match.capturedStart(1), match.capturedLength(1), local);
+            }
+        }
+
+        return lines.join(QLatin1Char('\n')).toUtf8();
     }
 
     void checkStall()
@@ -326,6 +393,9 @@ private:
     QPointer<QNetworkReply> m_reply;
     QTimer m_stallTimer;
     QTimer m_retryTimer;
+    std::function<QUrl(const QUrl &)> m_relayResource;
+    QByteArray m_playlistData;
+    bool m_playlist = false;
     bool m_headerSent = false;
     bool m_passThrough = false;
     int m_attempts = 0;
@@ -396,7 +466,10 @@ QUrl StreamProxy::relay(Target target)
     m_targets.insert(token, target);
     m_order.append(token);
     while (m_order.size() > s_maxTargets) {
-        m_targets.remove(m_order.takeFirst());
+        const QString expired = m_order.takeFirst();
+        m_targets.remove(expired);
+        m_resources.remove(expired);
+        m_resourceOrder.remove(expired);
     }
 
     QUrl url;
@@ -444,13 +517,69 @@ void StreamProxy::serve(QTcpSocket *socket, const QByteArray &request)
         return;
     }
 
-    const auto target = m_targets.constFind(QString::fromLatin1(requestLine.at(1).mid(1)));
-    if (target == m_targets.cend()) {
+    const QStringList path = QString::fromLatin1(requestLine.at(1).mid(1)).split(QLatin1Char('/'));
+    const QString token = path.value(0);
+    const auto root = m_targets.constFind(token);
+
+    if (root == m_targets.cend() || path.size() > 2) {
         respond(socket, "404 Not Found");
 
         return;
     }
 
+    Target target = *root;
+
+    if (path.size() == 2) {
+        const auto resources = m_resources.constFind(token);
+
+        if (resources == m_resources.cend() || !resources->contains(path.at(1))) {
+            respond(socket, "404 Not Found");
+
+            return;
+        }
+
+        target = resources->value(path.at(1));
+    }
+
     // Lives as long as the player's connection.
-    new Session(socket, *target, m_timing, m_networkManager);
+    new Session(socket, target, m_timing, m_networkManager, [this, token, target](const QUrl &url) {
+        return resource(token, target, url);
+    });
+}
+
+QUrl StreamProxy::resource(const QString &token, const Target &parent, const QUrl &upstream)
+{
+    if (upstream.scheme() != QLatin1String("http") && upstream.scheme() != QLatin1String("https")) {
+        return {};
+    }
+
+    const QString suffix = upstream.path().section(QLatin1Char('.'), -1);
+    const QRegularExpression extension(QStringLiteral("^[A-Za-z0-9]{1,8}$"));
+    const QString key =
+        QString::fromLatin1(
+            QCryptographicHash::hash(upstream.toEncoded(), QCryptographicHash::Sha256).toHex())
+        + QLatin1Char('.') + (extension.match(suffix).hasMatch() ? suffix : QStringLiteral("ts"));
+    auto &resources = m_resources[token];
+    auto &order = m_resourceOrder[token];
+
+    if (!resources.contains(key)) {
+        Target target = parent;
+        target.url = upstream;
+        target.finite = true;
+        target.secretUrl = true;
+        resources.insert(key, target);
+        order.append(key);
+    }
+
+    while (order.size() > s_maxResources) {
+        resources.remove(order.takeFirst());
+    }
+
+    QUrl local;
+    local.setScheme(QStringLiteral("http"));
+    local.setHost(QStringLiteral("127.0.0.1"));
+    local.setPort(m_server->serverPort());
+    local.setPath(QLatin1Char('/') + token + QLatin1Char('/') + key);
+
+    return local;
 }

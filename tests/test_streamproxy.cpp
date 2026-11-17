@@ -307,6 +307,69 @@ private Q_SLOTS:
         QCOMPARE(player.body(), playlist);
     }
 
+    void relaysNestedHlsResources()
+    {
+        const QByteArray segment = packets(4);
+        const QByteArray key("\0\1\2\3", 4);
+        FakeServer server([&](QTcpSocket *socket, const QByteArray &request, int) {
+            if (!request.contains("Cookie: box=private")) {
+                socket->write("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+                socket->disconnectFromHost();
+
+                return;
+            }
+
+            QByteArray data;
+            QByteArray type = "application/vnd.apple.mpegurl";
+
+            if (request.startsWith("GET /live/master.m3u8 ")) {
+                data = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nchild/list.m3u8\n";
+            } else if (request.startsWith("GET /live/child/list.m3u8 ")) {
+                data =
+                    "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"../secret.key\"\n"
+                    "#EXTINF:5,\npart.ts?token=private\n";
+            } else if (request.startsWith("GET /live/secret.key ")) {
+                data = key;
+                type = "application/octet-stream";
+            } else {
+                data = segment;
+                type = "video/mp2t";
+            }
+
+            ok(socket, type, data.size());
+            socket->write(data);
+            socket->disconnectFromHost();
+        });
+        StreamProxy proxy;
+        const QUrl url = proxy.relay({.url = server.url(QStringLiteral("/live/master.m3u8")),
+                                      .headers = {{"Cookie", "box=private"}}});
+        Player master(url);
+        QVERIFY(master.waitClosed());
+        const QUrl child(QString::fromUtf8(master.body().split('\n').at(2)));
+        QCOMPARE(child.host(), QStringLiteral("127.0.0.1"));
+        QVERIFY(child.path().endsWith(QLatin1String(".m3u8")));
+
+        Player playlist(child);
+        QVERIFY(playlist.waitClosed());
+        QVERIFY(!playlist.body().contains("private"));
+        const QByteArray keyLine = playlist.body().split('\n').at(1);
+        const QUrl keyUrl(QString::fromUtf8(keyLine.split('"').at(1)));
+        Player keyPlayer(keyUrl);
+        QVERIFY(keyPlayer.waitClosed());
+        QCOMPARE(keyPlayer.body(), key);
+
+        const QUrl part(QString::fromUtf8(playlist.body().split('\n').at(3)));
+        Player partPlayer(part);
+        QVERIFY(partPlayer.waitClosed());
+        QCOMPARE(partPlayer.body(), segment);
+        QVERIFY(server.requests().last().startsWith("GET /live/child/part.ts?token=private "));
+
+        // Reloading the master still works after requesting its resources.
+        Player reload(url);
+        QVERIFY(reload.waitClosed());
+        QCOMPARE(reload.body(), master.body());
+    }
+
     void detectsHlsByPath()
     {
         QVERIFY(StreamProxy::isHls(QUrl(QStringLiteral("http://a/live/1.m3u8?token=x"))));

@@ -50,6 +50,8 @@ public:
         // The address itself holds a secret (Xtream puts the password in its path), so the
         // player is never sent there, not even for HLS.
         bool secretUrl = false;
+        // HLS resources are finite files and bypass the transport stream buffer.
+        bool finite = false;
     };
 
     // Returns a local address for 'target'. Credentials in its URL are used instead of
@@ -74,6 +76,10 @@ private:
     void handleConnection(QTcpSocket *socket);
     void serve(QTcpSocket *socket, const QByteArray &request);
 
+    QUrl resource(const QString &token, const Target &parent, const QUrl &upstream);
+
+    QHash<QString, QHash<QString, Target>> m_resources;
+    QHash<QString, QStringList> m_resourceOrder;
     QTcpServer *m_server;
     QNetworkAccessManager *m_networkManager;
     QHash<QString, Target> m_targets;
