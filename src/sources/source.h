@@ -75,6 +75,8 @@ public:
     virtual void restoreChannels(const QVector<Channel> &channels);
     // Logs in, then reports the channels and the guide of the next 'guideDays' days.
     virtual void refresh(int guideDays) = 0;
+    // Fetches guide data on demand when a source cannot provide one bulk guide.
+    virtual void requestGuide(const QString &channelId, qint64 from, qint64 to);
     virtual void requestStream(const QString &channelId) = 0;
     // Checks the settings without changing anything; emits testFinished().
     virtual void test() = 0;

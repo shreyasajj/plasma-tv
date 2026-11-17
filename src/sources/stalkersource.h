@@ -11,6 +11,7 @@
 #include "stalker.h"
 
 #include <QHash>
+#include <QSet>
 #include <QTimer>
 
 #include <functional>
@@ -32,6 +33,7 @@ public:
 
     void restoreChannels(const QVector<Channel> &channels) override;
     void refresh(int guideDays) override;
+    void requestGuide(const QString &channelId, qint64 from, qint64 to) override;
     void requestStream(const QString &channelId) override;
     void test() override;
 
@@ -51,6 +53,7 @@ private:
     void signIn(const Done &done);
     // A request with the token; a token the portal no longer accepts is renewed once.
     void get(const std::function<QUrl()> &url, const Reply &reply, bool retried = false);
+    void fetchGuidePage(const QString &channelId, const QString &date, int page);
     void setToken(const QString &token);
 
     TvhApi *m_api;
@@ -58,9 +61,14 @@ private:
     QUrl m_endpoint; // the API address that answered the handshake
     Stalker::Device m_device;
     QString m_token;
+    QString m_currentChannel;
     QHash<QString, QString> m_cmds; // channel ID → cmd for create_link
     QTimer m_watchdog;
     int m_generation = 0;
+    int m_guideDays = 1;
+    bool m_guideFallback = false;
+    QSet<QString> m_guideRequests;
+    QHash<qint64, EpgEvent> m_guideEvents;
 };
 
 #endif // STALKERSOURCE_H

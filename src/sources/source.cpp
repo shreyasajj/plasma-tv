@@ -27,3 +27,7 @@ void Source::cancelRecording(const EpgEvent &)
 void Source::explainStreamError(const QString &)
 {
 }
+
+void Source::requestGuide(const QString &, qint64, qint64)
+{
+}

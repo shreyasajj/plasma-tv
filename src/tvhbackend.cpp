@@ -562,6 +562,12 @@ void TvhBackend::testConnection(const QVariantMap &values)
 
 QVariantList TvhBackend::eventsForChannel(const QString &uuid, double fromMs, double toMs) const
 {
+    if (const SourceState *state = stateOfChannel(uuid)) {
+        state->source->requestGuide(ChannelId::ownOf(uuid),
+                                    static_cast<qint64>(fromMs / 1000.0),
+                                    static_cast<qint64>(toMs / 1000.0));
+    }
+
     QVariantList result;
     const auto events = m_store.range(uuid,
                                       static_cast<qint64>(fromMs / 1000.0),
@@ -577,6 +583,12 @@ QVariantList TvhBackend::eventsForChannel(const QString &uuid, double fromMs, do
 
 QVariantMap TvhBackend::eventAt(const QString &uuid, double timeMs) const
 {
+    if (const SourceState *state = stateOfChannel(uuid)) {
+        state->source->requestGuide(ChannelId::ownOf(uuid),
+                                    static_cast<qint64>(timeMs / 1000.0),
+                                    static_cast<qint64>(timeMs / 1000.0) + 1);
+    }
+
     const EpgEvent *event = m_store.eventAt(uuid, static_cast<qint64>(timeMs / 1000.0));
 
     return event ? event->toVariant() : QVariantMap();
@@ -584,6 +596,12 @@ QVariantMap TvhBackend::eventAt(const QString &uuid, double timeMs) const
 
 QVariantMap TvhBackend::nextEvent(const QString &uuid, double afterMs) const
 {
+    if (const SourceState *state = stateOfChannel(uuid)) {
+        state->source->requestGuide(ChannelId::ownOf(uuid),
+                                    static_cast<qint64>(afterMs / 1000.0),
+                                    static_cast<qint64>(afterMs / 1000.0) + 1);
+    }
+
     const EpgEvent *event = m_store.nextAfter(uuid, static_cast<qint64>(afterMs / 1000.0));
 
     return event ? event->toVariant() : QVariantMap();

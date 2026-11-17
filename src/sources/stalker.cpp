@@ -200,6 +200,19 @@ QUrl Stalker::guideUrl(const QUrl &endpoint, int hours)
                    {{QStringLiteral("period"), QString::number(hours)}});
 }
 
+QUrl Stalker::channelGuideUrl(const QUrl &endpoint,
+                              const QString &channelId,
+                              const QString &date,
+                              int page)
+{
+    return request(endpoint,
+                   QStringLiteral("epg"),
+                   QStringLiteral("get_simple_data_table"),
+                   {{QStringLiteral("ch_id"), channelId},
+                    {QStringLiteral("date"), date},
+                    {QStringLiteral("p"), QString::number(page)}});
+}
+
 QUrl Stalker::linkUrl(const QUrl &endpoint, const QString &cmd)
 {
     return request(endpoint,

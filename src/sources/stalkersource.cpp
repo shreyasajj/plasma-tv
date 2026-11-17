@@ -7,10 +7,17 @@
 #include "tvhapi.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTimeZone>
 
 namespace
 {
+// Convert the configured guide horizon to seconds.
+constexpr qint64 s_guideDaySeconds = 24LL * 60 * 60;
+// A daily guide should fit within this many pages even with five-minute programmes.
+constexpr int s_maxGuidePages = 100;
 // MAG boxes report in every few minutes; many portals drop the token otherwise.
 constexpr int s_watchdogMs = 2 * 60 * 1000;
 }
@@ -205,6 +212,10 @@ void StalkerSource::restoreChannels(const QVector<Channel> &channels)
 void StalkerSource::refresh(int guideDays)
 {
     const int generation = ++m_generation;
+    m_guideDays = guideDays;
+    m_guideFallback = false;
+    m_guideRequests.clear();
+    m_guideEvents.clear();
 
     connectPortal([this, generation, guideDays](const QString &error) {
         if (generation != m_generation) {
@@ -258,9 +269,13 @@ void StalkerSource::refresh(int guideDays)
                         QVector<EpgEvent> events;
 
                         if (!guide.ok || !Stalker::parseGuide(guide.body, &events)) {
-                            Q_EMIT guideFailed(
-                                tr("Loading the TV guide failed: %1")
-                                    .arg(guide.ok ? tr("the reply is not a guide") : guide.error));
+                            // Some portals disable bulk EPG but still serve daily channel guides.
+                            m_guideFallback = true;
+                            Q_EMIT guideReady({});
+                            const qint64 now = QDateTime::currentSecsSinceEpoch();
+                            requestGuide(m_currentChannel,
+                                         now,
+                                         now + (m_guideDays * s_guideDaySeconds));
 
                             return;
                         }
@@ -271,8 +286,74 @@ void StalkerSource::refresh(int guideDays)
     });
 }
 
+void StalkerSource::requestGuide(const QString &channelId, qint64 from, qint64 to)
+{
+    if (!m_guideFallback || !m_cmds.contains(channelId)) {
+        return;
+    }
+
+    const QDate today = QDate::currentDate();
+    const QDate first = qMax(today, QDateTime::fromSecsSinceEpoch(from).date());
+    const QDate last =
+        qMin(today.addDays(m_guideDays), QDateTime::fromSecsSinceEpoch(qMax(from, to - 1)).date());
+
+    for (QDate day = first; day <= last; day = day.addDays(1)) {
+        const QString date = day.toString(Qt::ISODate);
+        const QString key = channelId + QLatin1Char(':') + date;
+
+        if (m_guideRequests.contains(key)) {
+            continue;
+        }
+
+        m_guideRequests.insert(key);
+        fetchGuidePage(channelId, date, 0);
+    }
+}
+
+void StalkerSource::fetchGuidePage(const QString &channelId, const QString &date, int page)
+{
+    const int generation = m_generation;
+    get(
+        [this, channelId, date, page]() {
+            return Stalker::channelGuideUrl(m_endpoint, channelId, date, page);
+        },
+        [this, generation, channelId, date, page](const ApiResult &result) {
+            if (generation != m_generation) {
+                return;
+            }
+
+            QVector<EpgEvent> events;
+
+            if (!result.ok || !Stalker::parseGuide(result.body, &events)) {
+                Q_EMIT guideFailed(tr("Loading the channel guide failed"));
+
+                return;
+            }
+
+            for (const EpgEvent &event : events) {
+                if (event.channel == channelId) {
+                    m_guideEvents.insert(event.id, event);
+                }
+            }
+
+            Q_EMIT guideReady(m_guideEvents.values().toVector());
+
+            const QJsonObject data =
+                QJsonDocument::fromJson(result.body).object().value(QLatin1String("js")).toObject();
+            const int total = data.value(QLatin1String("total_items")).toVariant().toInt();
+            const int size = data.value(QLatin1String("max_page_items")).toVariant().toInt();
+
+            if (size > 0 && (page + 1) * size < total && page + 1 < s_maxGuidePages) {
+                fetchGuidePage(channelId, date, page + 1);
+            }
+        });
+}
+
 void StalkerSource::requestStream(const QString &channelId)
 {
+    m_currentChannel = channelId;
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    requestGuide(channelId, now, now + (m_guideDays * s_guideDaySeconds));
     const QString cmd = m_cmds.value(channelId);
 
     if (cmd.isEmpty()) {

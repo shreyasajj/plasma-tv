@@ -53,6 +53,7 @@ QUrl profileUrl(const QUrl &endpoint, const Device &device);
 QUrl authUrl(const QUrl &endpoint, const Device &device);
 QUrl channelsUrl(const QUrl &endpoint);
 QUrl guideUrl(const QUrl &endpoint, int hours);
+QUrl channelGuideUrl(const QUrl &endpoint, const QString &channelId, const QString &date, int page);
 QUrl linkUrl(const QUrl &endpoint, const QString &cmd);
 QUrl watchdogUrl(const QUrl &endpoint);
 

@@ -6,6 +6,7 @@
 #include "sources/stalker.h"
 #include "sources/stalkersource.h"
 
+#include <QDateTime>
 #include <QFile>
 #include <QSignalSpy>
 #include <QTest>
@@ -282,6 +283,80 @@ private Q_SLOTS:
             });
         QCOMPARE(link->query(QStringLiteral("cmd")),
                  QStringLiteral("ffmpeg http://localhost/ch/1_"));
+    }
+
+    void fallsBackToDailyChannelGuide()
+    {
+        Portal portal;
+        FakeServer server([&](const FakeServer::Request &request) {
+            const QString action = request.query(QStringLiteral("action"));
+
+            if (action == QLatin1String("get_epg_info")) {
+                return FakeServer::Reply{.body = {}};
+            }
+
+            if (action == QLatin1String("get_simple_data_table")) {
+                const bool second = request.query(QStringLiteral("p")) == QLatin1String("1");
+                const QByteArray id = second ? "2" : "1";
+
+                return FakeServer::Reply{
+                    .body = "{\"js\":{\"total_items\":\"2\",\"max_page_items\":1,\"data\":[{"
+                            "\"id\":" + id + ",\"ch_id\":\"1\",\"name\":\"News\","
+                            "\"start_timestamp\":1893495600,\"stop_timestamp\":1893499200}]}}"};
+            }
+
+            return portal.answer(request);
+        });
+        StalkerSource source(config(server.address()));
+        QSignalSpy guide(&source, &Source::guideReady);
+        QSignalSpy failed(&source, &Source::guideFailed);
+        source.refresh(3);
+        QVERIFY(guide.wait(5000));
+        QVERIFY(guide.first().first().value<QVector<EpgEvent>>().isEmpty());
+        QVERIFY(failed.isEmpty());
+
+        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        source.requestGuide(QStringLiteral("1"), now, now + 1);
+        QTRY_COMPARE(guide.count(), 3);
+        QCOMPARE(guide.last().first().value<QVector<EpgEvent>>().size(), 2);
+        const auto requests = server.requests.size();
+        source.requestGuide(QStringLiteral("1"), now, now + 1);
+        QCOMPARE(server.requests.size(), requests);
+        const auto request = server.requests.last();
+        QCOMPARE(request.query(QStringLiteral("type")), QStringLiteral("epg"));
+        QCOMPARE(request.query(QStringLiteral("ch_id")), QStringLiteral("1"));
+        QCOMPARE(request.query(QStringLiteral("date")), QDate::currentDate().toString(Qt::ISODate));
+        QCOMPARE(request.query(QStringLiteral("p")), QStringLiteral("1"));
+    }
+
+    void loadsGuideForChannelAlreadyPlaying()
+    {
+        Portal portal;
+        FakeServer server([&](const FakeServer::Request &request) {
+            const QString action = request.query(QStringLiteral("action"));
+
+            if (action == QLatin1String("get_epg_info")) {
+                return FakeServer::Reply{.body = {}};
+            }
+
+            if (action == QLatin1String("get_simple_data_table")) {
+                return FakeServer::Reply{.body = fixture(QStringLiteral("epg.json"))};
+            }
+
+            return portal.answer(request);
+        });
+        StalkerSource source(config(server.address()));
+        QSignalSpy guide(&source, &Source::guideReady);
+        connect(&source, &Source::channelsReady, &source, [&source]() {
+            source.requestStream(QStringLiteral("1"));
+        });
+        source.refresh(1);
+        QTRY_VERIFY(!guide.isEmpty() && !guide.last().first().value<QVector<EpgEvent>>().isEmpty());
+        QVERIFY(
+            std::any_of(server.requests.cbegin(), server.requests.cend(), [](const auto &request) {
+                return request.query(QStringLiteral("action"))
+                    == QLatin1String("get_simple_data_table");
+            }));
     }
 
     void renewsExpiredToken()
