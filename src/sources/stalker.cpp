@@ -256,6 +256,8 @@ bool Stalker::parseChannels(const QByteArray &data, const QUrl &root, QVector<Ch
         const QJsonObject object = value.toObject();
         Channel channel;
         channel.uuid = text(object.value(QLatin1String("id")));
+        // The portal's channel ID stays the same across refreshes, so automations may rely on it.
+        channel.controlId = channel.uuid;
         channel.stream = text(object.value(QLatin1String("cmd")));
 
         if (channel.uuid.isEmpty() || channel.stream.isEmpty()) {
