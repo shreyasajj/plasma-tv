@@ -4,6 +4,8 @@
 
 #include "m3u.h"
 
+#include "channelidentity.h"
+
 #include <QHash>
 #include <QObject>
 #include <QRegularExpression>
@@ -88,6 +90,8 @@ M3u::Playlist M3u::parse(const QByteArray &data, const QUrl &source)
 {
     Playlist playlist;
     QSet<QString> usedUuids;
+    QStringList explicitIds;
+    QStringList controlNames;
     std::optional<Entry> pending;
 
     const QString text = QString::fromUtf8(data);
@@ -138,6 +142,8 @@ M3u::Playlist M3u::parse(const QByteArray &data, const QUrl &source)
             channel.name = tvgName;
         }
 
+        controlNames.append(channel.name);
+
         if (channel.name.isEmpty()) {
             channel.name = QObject::tr("Channel %1").arg(playlist.channels.size() + 1);
         }
@@ -150,6 +156,7 @@ M3u::Playlist M3u::parse(const QByteArray &data, const QUrl &source)
 
         // Stable ids keep the last watched channel across playlist updates.
         const QString tvgId = attribute(entry, {"tvg-id", "channel-id"});
+        explicitIds.append(tvgId);
         const QString base = !tvgId.isEmpty() ? tvgId : channel.name;
 
         channel.uuid = base;
@@ -169,6 +176,12 @@ M3u::Playlist M3u::parse(const QByteArray &data, const QUrl &source)
         }
 
         playlist.channels.append(std::move(channel));
+    }
+
+    const QStringList controlIds = ChannelIdentity::forPlaylist(explicitIds, controlNames);
+
+    for (qsizetype i = 0; i < playlist.channels.size(); ++i) {
+        playlist.channels[i].controlId = controlIds.at(i);
     }
 
     const bool numbered = std::ranges::any_of(playlist.channels, [](const Channel &channel) {

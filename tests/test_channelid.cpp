@@ -67,9 +67,11 @@ private Q_SLOTS:
         QCOMPARE(ChannelId::ownEventOf(events.first().id), 9);
         QCOMPARE(ChannelId::sourceIndexOf(events.first().id), 2);
 
-        const QVector<Channel> channels =
-            ChannelId::prefixed(QStringLiteral("s"), {channel(QStringLiteral("a"), 1)});
+        Channel original = channel(QStringLiteral("a"), 1);
+        original.controlId = QStringLiteral("stable");
+        const QVector<Channel> channels = ChannelId::prefixed(QStringLiteral("s"), {original});
         QCOMPARE(channels.first().uuid, QStringLiteral("s:a"));
+        QCOMPARE(channels.first().controlId, QStringLiteral("s:stable"));
     }
 
     void oneSourceStaysAsItIs()

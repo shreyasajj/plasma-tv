@@ -29,6 +29,7 @@ flimmer_add_test(
     test_m3u
     SOURCES
         ${PROJECT_SOURCE_DIR}/src/m3u.cpp
+        ${PROJECT_SOURCE_DIR}/src/channelidentity.cpp
         ${PROJECT_SOURCE_DIR}/src/epgstore.cpp
     LIBRARIES Qt6::Core
 )
@@ -117,6 +118,7 @@ flimmer_add_test(
         ${PROJECT_SOURCE_DIR}/src/sources/headers.cpp
         ${PROJECT_SOURCE_DIR}/src/sources/sourceconfig.cpp
         ${PROJECT_SOURCE_DIR}/src/m3u.cpp
+        ${PROJECT_SOURCE_DIR}/src/channelidentity.cpp
         ${PROJECT_SOURCE_DIR}/src/tvhapi.cpp
         ${PROJECT_SOURCE_DIR}/src/guidecache.cpp
         ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
@@ -210,4 +212,19 @@ flimmer_add_test(
         ${PROJECT_SOURCE_DIR}/src/networkauth.cpp
         ${PROJECT_SOURCE_DIR}/src/serverconfig.cpp
     LIBRARIES Qt6::Core Qt6::Network
+)
+
+flimmer_add_test(
+    test_channelidentity
+    SOURCES ${PROJECT_SOURCE_DIR}/src/channelidentity.cpp
+    LIBRARIES Qt6::Core
+)
+
+flimmer_add_test(
+    test_bridgecontrol
+    SOURCES
+        ${PROJECT_SOURCE_DIR}/src/bridgecontrol.cpp
+        ${PROJECT_SOURCE_DIR}/src/channelmodel.cpp
+        ${PROJECT_SOURCE_DIR}/src/epgstore.cpp
+    LIBRARIES Qt6::Core Qt6::Qml
 )

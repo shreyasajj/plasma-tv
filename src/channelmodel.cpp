@@ -35,6 +35,7 @@ QHash<int, QByteArray> ChannelModel::roleNames() const
         {NowRecordingRole, "nowRecording"},
         {NextTitleRole, "nextTitle"},
         {NextStartRole, "nextStart"},
+        {NextStopRole, "nextStop"},
     };
 
     return roles;
@@ -90,6 +91,8 @@ QVariant ChannelModel::data(const QModelIndex &index, int role) const
         return nowNext.next ? nowNext.next->title : QString();
     case NextStartRole:
         return nowNext.next ? static_cast<double>(nowNext.next->start) * 1000.0 : 0.0;
+    case NextStopRole:
+        return nowNext.next ? static_cast<double>(nowNext.next->stop) * 1000.0 : 0.0;
     default:
         return {};
     }

@@ -147,6 +147,7 @@ private Q_SLOTS:
         // The entry without a stream_id is skipped; numbers come as numbers or strings.
         QCOMPARE(streams.channels.size(), 2);
         QCOMPARE(streams.channels.at(0).uuid, QStringLiteral("101"));
+        QCOMPARE(streams.channels.at(0).controlId, QStringLiteral("101"));
         QCOMPARE(streams.channels.at(0).number, 1);
         QCOMPARE(streams.channels.at(0).icon, QStringLiteral("http://logos.example/bbc1.png"));
         QCOMPARE(streams.channels.at(1).uuid, QStringLiteral("102"));
