@@ -31,9 +31,8 @@ public:
     Q_INVOKABLE void
     publish(const QString &channelUuid, const QString &state, bool catalogueLoading = false);
     Q_INVOKABLE void acknowledge(bool accepted);
-
-public Q_SLOTS:
-    QString Execute(const QString &payload);
+    // A slot so main.cpp's ExportAllSlots puts it on the session bus.
+    Q_SLOT QString Execute(const QString &payload);
 
 Q_SIGNALS:
     // Exported on the session bus so listeners need not poll; carries no data.
@@ -56,9 +55,9 @@ private:
     QHash<QString, Cached> m_cache;
     QQueue<QString> m_order;
 
-    QJsonObject channel(int row) const;
-    QJsonObject snapshot() const;
-    QJsonObject listChannels(const QJsonObject &request) const;
+    [[nodiscard]] QJsonObject channel(int row) const;
+    [[nodiscard]] QJsonObject snapshot() const;
+    [[nodiscard]] QJsonObject listChannels(const QJsonObject &request) const;
     QJsonObject playerCommand(const QJsonObject &request);
     QJsonObject execute(const QJsonObject &request);
 };

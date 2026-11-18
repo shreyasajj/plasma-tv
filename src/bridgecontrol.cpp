@@ -331,7 +331,7 @@ QString BridgeControl::Execute(const QString &payload)
             return serialized;
         }
 
-        m_cache.insert(id, {request, serialized});
+        m_cache.insert(id, {.request = request, .response = serialized});
         m_order.enqueue(id);
 
         while (m_order.size() > s_maxCachedRequests) {
