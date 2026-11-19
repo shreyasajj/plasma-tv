@@ -9,11 +9,21 @@ import org.kde.bigscreen.ui as BigscreenUI
 
 // Text input. Typing is done with a physical keyboard or Plasma's virtual
 // keyboard (plasma-keyboard), which KWin shows for the focused field.
+// Once a letter is typed on a physical keyboard, the virtual one stays hidden
+// until Flimmer closes; a button in the dialog brings it back.
 BigscreenUI.Dialog {
     id: root
     property string mode: "text"   // "text" | "password" | "number"
     property var callback: null
     property Item returnFocus: null
+    // Lives as long as the app: the dialog is created once, in Main.
+    // Not "is a keyboard connected": remote dongles and CEC bridges register as keyboards too.
+    property bool hardwareKeyboard: false
+
+    function showVirtualKeyboard() {
+        if (!hardwareKeyboard)
+            Qt.inputMethod.show();
+    }
 
     // Keep clear of the lower half, where the virtual keyboard slides in.
     anchors.centerIn: undefined
@@ -35,7 +45,7 @@ BigscreenUI.Dialog {
 
     onOpened: {
         field.selectAll();
-        Qt.inputMethod.show();
+        root.showVirtualKeyboard();
     }
 
     onAccepted: {
@@ -61,10 +71,35 @@ BigscreenUI.Dialog {
             inputMethodHints: root.mode === "number" ? Qt.ImhDigitsOnly : root.mode === "password" ? Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText : Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText | Qt.ImhUrlCharactersOnly
             validator: root.mode === "number" ? portValidator : null
             onAccepted: root.accept()
-            Keys.onDownPressed: root.footer.forceActiveFocus()
+            Keys.onDownPressed: (virtualKeyboardButton.visible ? virtualKeyboardButton : root.footer).forceActiveFocus()
+            // The virtual keyboard commits text through the input method, and a remote sends
+            // no letters, so a letter key press comes from a physical keyboard.
+            Keys.onPressed: event => {
+                event.accepted = false;
+
+                if (!root.hardwareKeyboard && event.text.length > 0
+                        && event.text.toLowerCase() !== event.text.toUpperCase()) {
+                    root.hardwareKeyboard = true;
+                    Qt.inputMethod.hide();
+                }
+            }
             onActiveFocusChanged: {
                 if (activeFocus)
-                    Qt.inputMethod.show();
+                    root.showVirtualKeyboard();
+            }
+        }
+
+        TvButton {
+            id: virtualKeyboardButton
+            visible: root.hardwareKeyboard
+            text: qsTr("Show on-screen keyboard")
+            icon.name: "input-keyboard-virtual"
+            Keys.onUpPressed: field.forceActiveFocus()
+            Keys.onDownPressed: root.footer.forceActiveFocus()
+            onActivated: {
+                root.hardwareKeyboard = false;
+                field.forceActiveFocus();
+                Qt.inputMethod.show();
             }
         }
 
