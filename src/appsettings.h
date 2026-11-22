@@ -16,10 +16,12 @@
 class QQmlEngine;
 class QJSEngine;
 
-// Persistent application settings. Non-secret values go to the regular
-// config file (~/.config/flimmer/flimmer.conf), the
-// password is stored in the system secret store (KWallet / Secret Service)
-// through QtKeychain and is never exposed to QML in plain text.
+// Persistent application settings in the config file
+// (~/.config/flimmer/flimmer.conf), which only the user may read. The
+// password is kept there too, so starting Flimmer doesn't need the wallet to
+// be unlocked; it is never exposed to QML in plain text. A password that older
+// versions kept in the system secret store (KWallet / Secret Service) is moved
+// there on the first start.
 class AppSettings : public QObject
 {
     Q_OBJECT

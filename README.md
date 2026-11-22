@@ -29,7 +29,7 @@ that is playing shows through behind the menus.
 ![Live TV page with the channel list and programme details](img/live-tv.png)
 
 **Settings**: the source (TVHeadend or M3U + XMLTV), server address,
-credentials (the password is stored in the wallet), playback options, days of
+credentials, playback options, days of
 guide data and color scheme, next to the connection status.
 
 ![Settings page](img/settings.png)

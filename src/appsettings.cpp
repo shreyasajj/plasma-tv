@@ -8,6 +8,7 @@
 #include "networkauth.h"
 #include "streambuffer.h"
 
+#include <QFile>
 #include <QQmlEngine>
 #include <QSettings>
 
@@ -19,6 +20,9 @@ const QString s_keychainService = // NOLINT(bugprone-throwing-static-initializat
     QStringLiteral("flimmer");
 const QString s_keychainKey = // NOLINT(bugprone-throwing-static-initialization)
     QStringLiteral("server-password");
+// The password in the config file; older versions kept it in the secret store.
+const QString s_passwordKey = // NOLINT(bugprone-throwing-static-initialization)
+    QStringLiteral("server/password");
 
 constexpr int32_t kDefaultGuideDays = 14;
 constexpr int32_t kDefaultTvhPort = 9981;
@@ -105,11 +109,27 @@ void AppSettings::loadPassword()
         return;
     }
 
+    QSettings const settings;
+
+    if (settings.contains(s_passwordKey)) {
+        m_server.password = settings.value(s_passwordKey).toString();
+        NetworkAuth::setActiveServer(m_server);
+        m_credentialsReady = true;
+        return;
+    }
+
+    // Older versions kept the password in the system secret store. It is moved to the
+    // settings once; if the store is locked or unavailable, the move is tried again next time.
     auto *job = new QKeychain::ReadPasswordJob(s_keychainService, this);
     job->setKey(s_keychainKey);
     connect(job, &QKeychain::Job::finished, this, [this, job] {
         if (job->error() == QKeychain::NoError) {
             m_server.password = job->textData();
+            storePassword(m_server.password);
+
+            auto *remove = new QKeychain::DeletePasswordJob(s_keychainService, this);
+            remove->setKey(s_keychainKey);
+            remove->start();
             setSecretStoreStatus({});
         } else if (job->error() != QKeychain::EntryNotFound) {
             qWarning() << "Reading password from secret store failed:" << job->errorString();
@@ -126,28 +146,18 @@ void AppSettings::loadPassword()
 
 void AppSettings::storePassword(const QString &password)
 {
-    QKeychain::Job *job;
+    QSettings settings;
+
     if (password.isEmpty()) {
-        job = new QKeychain::DeletePasswordJob(s_keychainService, this);
+        settings.remove(s_passwordKey);
     } else {
-        auto *write = new QKeychain::WritePasswordJob(s_keychainService, this);
-        write->setTextData(password);
-        job = write;
+        settings.setValue(s_passwordKey, password);
     }
 
-    job->setKey(s_keychainKey);
-    connect(job, &QKeychain::Job::finished, this, [this, job, password] {
-        if (job->error() == QKeychain::NoError
-            || (password.isEmpty() && job->error() == QKeychain::EntryNotFound)) {
-            setSecretStoreStatus({});
-        } else {
-            qWarning() << "Storing password in secret store failed:" << job->errorString();
-            setSecretStoreStatus(
-                tr("Password could not be stored securely and is kept for this session only (%1)")
-                    .arg(job->errorString()));
-        }
-    });
-    job->start();
+    settings.sync();
+    setSecretStoreStatus({});
+    // The password is in there: only the user may read the file.
+    QFile::setPermissions(settings.fileName(), QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
 
 void AppSettings::setSecretStoreStatus(const QString &status)
