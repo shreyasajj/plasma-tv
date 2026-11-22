@@ -47,7 +47,6 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     void setChannels(const QVector<Channel> &channels);
-    void setBaseUrl(const QUrl &url);
 
     [[nodiscard]] const QVector<Channel> &channels() const
     {
@@ -79,7 +78,6 @@ private:
     QVector<Channel> m_channels;
     QVector<NowNext> m_nowNext;
     QHash<QString, int> m_rowOfUuid;
-    QUrl m_baseUrl;
 };
 
 #endif // CHANNELMODEL_H

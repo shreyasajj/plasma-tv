@@ -90,6 +90,12 @@ private:
         upstreamRequest.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("flimmer/0.1"));
         upstreamRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                                      QNetworkRequest::NoLessSafeRedirectPolicy);
+
+        // The source's own headers win, a User-Agent included.
+        for (const auto &[name, value] : m_target.headers) {
+            upstreamRequest.setRawHeader(name, value);
+        }
+
         m_reply = m_networkManager->get(upstreamRequest);
         // Always set, even empty: otherwise the server's credentials would be used.
         NetworkAuth::setReplyCredentials(m_reply, m_target.username, m_target.password);
@@ -134,8 +140,9 @@ private:
         const QByteArray type = m_reply->header(QNetworkRequest::ContentTypeHeader).toByteArray();
 
         if (isHlsType(type)) {
-            if (m_target.username.isEmpty()) {
-                // Let the player fetch the playlist and its segments itself.
+            if (m_target.username.isEmpty() && m_target.headers.isEmpty()) {
+                // Let the player fetch the playlist and its segments itself: it needs neither a
+                // login nor the source's headers.
                 const QByteArray location = m_reply->url().toEncoded();
                 dropReply();
                 respond(m_socket, "302 Found", "Location: " + location + "\r\n");
@@ -143,10 +150,10 @@ private:
                 return false;
             }
 
-            // Needs our credentials: relay it unchanged, as there is nothing to buffer. Only the
-            // playlist itself goes through the relay: relative segment addresses would resolve
-            // against the relay's address and get a 404, and the player fetches absolute ones
-            // without credentials. So this only works for playlists with absolute segment
+            // Needs our credentials or headers: relay it unchanged, as there is nothing to buffer.
+            // Only the playlist itself goes through the relay: relative segment addresses would
+            // resolve against the relay's address and get a 404, and the player fetches absolute
+            // ones without credentials. So this only works for playlists with absolute segment
             // addresses on hosts that need no login for them.
             m_passThrough = true;
         }
@@ -361,7 +368,8 @@ bool StreamProxy::listen()
 QUrl StreamProxy::relay(const QUrl &upstream,
                         const QString &username,
                         const QString &password,
-                        int bufferMode)
+                        int bufferMode,
+                        const Headers &headers)
 {
     if (!listen()) {
         return {};
@@ -376,7 +384,8 @@ QUrl StreamProxy::relay(const QUrl &upstream,
     Target target{.url = upstream,
                   .username = username,
                   .password = password,
-                  .bufferMode = bufferMode};
+                  .bufferMode = bufferMode,
+                  .headers = headers};
 
     if (!upstream.userName().isEmpty()) {
         target.username = upstream.userName();

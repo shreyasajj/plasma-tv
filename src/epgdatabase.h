@@ -9,6 +9,7 @@
 
 #include "epgstore.h"
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 #include <QThread>
@@ -28,21 +29,27 @@ public:
     ~EpgDatabase();
 
     bool open();
-    void clear();
-
-    [[nodiscard]] QString serverIdentity() const
+    // Identifies what a source's cached channels and guide came from (Source::identity()).
+    [[nodiscard]] QString sourceIdentity(const QString &sourceId) const
     {
-        return m_serverIdentity;
+        return m_identities.value(sourceId);
     }
 
-    void setServerIdentity(const QString &identity);
+    void setSourceIdentity(const QString &sourceId, const QString &identity);
+    [[nodiscard]] QStringList sources() const
+    {
+        return m_identities.keys();
+    }
+
     [[nodiscard]] qint64 lastUpdate() const;
 
-    void saveChannels(const QVector<Channel> &channels) const;
+    void clear();
+    // Forgets the channels and guide of one source; IDs of its channels start with "<id>:".
+    void clearSource(const QString &sourceId);
+    // Replaces the channels and the guide of one source.
+    void saveChannels(const QString &sourceId, const QVector<Channel> &channels);
     [[nodiscard]] QVector<Channel> loadChannels() const;
-
-    void saveEvents(const QVector<EpgEvent> &events, qint64 updatedAt) const;
-
+    void saveEvents(const QString &sourceId, const QVector<EpgEvent> &events, qint64 updatedAt);
     // Calls 'done' on the thread of 'context' once the events are loaded. 'context' must
     // outlive the database.
     void loadEvents(qint64 notEndedBefore,
@@ -62,7 +69,7 @@ private:
     void setMeta(const QString &key, const QString &value) const;
 
     QString m_connectionName;
-    QString m_serverIdentity;
+    QHash<QString, QString> m_identities;
     QThread m_thread;
 
     // Lives on m_thread; the jobs are queued to it.

@@ -10,6 +10,7 @@
 #include <QHash>
 #include <QList>
 #include <QObject>
+#include <QPair>
 #include <QStringList>
 #include <QUrl>
 
@@ -35,11 +36,17 @@ public:
 
     explicit StreamProxy(QObject *parent = nullptr);
 
+    using Headers = QList<QPair<QByteArray, QByteArray>>;
+
     // Returns a local address for 'upstream'. The credentials are answered to the server's
-    // challenges; ones in the URL are used instead and removed from it. 'bufferMode' is a
+    // challenges; ones in the URL are used instead and removed from it. The extra 'headers'
+    // (e.g. a User-Agent) go with every request, reconnects included. 'bufferMode' is a
     // StreamBuffer mode. An empty URL means the relay could not be started.
-    QUrl
-    relay(const QUrl &upstream, const QString &username, const QString &password, int bufferMode);
+    QUrl relay(const QUrl &upstream,
+               const QString &username,
+               const QString &password,
+               int bufferMode,
+               const Headers &headers = {});
 
     // HLS playlists are fetched by the player itself: relative segment addresses
     // wouldn't resolve against the relay.
@@ -56,6 +63,7 @@ public:
         QString username;
         QString password;
         int bufferMode = 0;
+        Headers headers;
     };
 
 private:

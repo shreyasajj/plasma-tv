@@ -22,8 +22,9 @@ class StreamProxy;
 class QQmlEngine;
 class QJSEngine;
 
-// Central coordinator: gets channels, the guide and streams from the source
-// (see Source), maintains the EPG cache and exposes channels/events to QML.
+// Central coordinator: gets channels, the guide and streams from the enabled
+// sources (see Source and SourceSettings), merges them into one channel list
+// and guide, maintains the EPG cache and exposes channels/events to QML.
 class TvhBackend : public QObject
 {
     Q_OBJECT
@@ -37,7 +38,10 @@ class TvhBackend : public QObject
     Q_PROPERTY(QString serverName READ serverName NOTIFY serverInfoChanged)
     Q_PROPERTY(QString serverVersion READ serverVersion NOTIFY serverInfoChanged)
     // Recordings need a source that records (TVHeadend); the others only play live.
+    // canRecord: at least one source can; canRecordChannel(): the channel's source can.
     Q_PROPERTY(bool canRecord READ canRecord NOTIFY serverInfoChanged)
+    // One entry per enabled source: id, name, type, status (Status), text.
+    Q_PROPERTY(QVariantList sourceStatus READ sourceStatus NOTIFY sourceStatusChanged)
     Q_PROPERTY(QDateTime lastUpdate READ lastUpdate NOTIFY epgChanged)
     Q_PROPERTY(int epgRevision READ epgRevision NOTIFY epgChanged)
     Q_PROPERTY(double epgEnd READ epgEnd NOTIFY epgChanged)
@@ -86,6 +90,8 @@ public:
     }
 
     [[nodiscard]] bool canRecord() const;
+    Q_INVOKABLE [[nodiscard]] bool canRecordChannel(const QString &uuid) const;
+    [[nodiscard]] QVariantList sourceStatus() const;
 
     [[nodiscard]] QDateTime lastUpdate() const
     {
@@ -109,7 +115,7 @@ public:
 
     Q_INVOKABLE void refresh();
 
-    // values: same keys as Settings.save(); password may be omitted to use the stored one.
+    // values: same keys as Sources.save(); secrets may be omitted to use the stored ones.
     Q_INVOKABLE void testConnection(const QVariantMap &values);
     Q_INVOKABLE void clearCache();
 
@@ -126,6 +132,7 @@ public:
 
 Q_SIGNALS:
     void statusChanged();
+    void sourceStatusChanged();
     void busyChanged();
     void serverInfoChanged();
     void epgChanged();
@@ -136,18 +143,40 @@ Q_SIGNALS:
     void notification(const QString &message);
 
 private:
+    struct SourceState {
+        Source *source = nullptr;
+        QVector<Channel> channels; // with prefixed IDs
+        QVector<EpgEvent> events; // with prefixed IDs
+        Status status = Connecting;
+        QString statusText;
+        bool busy = false;
+        QString serverName;
+        QString serverVersion;
+    };
+
     explicit TvhBackend(QObject *parent = nullptr);
 
-    void createSource();
-    void applySettings(bool serverChanged);
+    void createSources();
+    void createSource(const SourceConfig &config, int position);
+    // Deletes the source with this ID and forgets its state.
+    void removeSource(const QString &id);
+    void sourceSaved(const QString &id);
+    void sourceRemoved(const QString &id);
+    void sourcesReordered();
+    SourceState *state(const QString &id);
+    [[nodiscard]] const SourceState *stateOfChannel(const QString &uuid) const;
+    static void refreshSource(SourceState &state);
+    void refreshOffline();
     void loadCache();
-    void finishEpg(QVector<EpgEvent> events);
+    void mergeChannels();
+    void mergeEvents();
+    void updateStatus();
     void playStream(const QString &uuid, const Source::StreamTarget &target);
     void setStatus(Status status, const QString &text);
     void setBusy(bool busy);
     void setRecordingState(qint64 eventId, const QString &dvrUuid, const QString &dvrState);
 
-    Source *m_source = nullptr;
+    QList<SourceState> m_sources; // enabled sources, in the order of the settings
     ChannelModel *m_channels;
     StreamProxy *m_streamProxy;
     EpgStore m_store;

@@ -115,19 +115,6 @@ void ChannelModel::setChannels(const QVector<Channel> &channels)
     }
 }
 
-void ChannelModel::setBaseUrl(const QUrl &url)
-{
-    if (url == m_baseUrl) {
-        return;
-    }
-
-    m_baseUrl = url;
-
-    if (!m_channels.isEmpty()) {
-        Q_EMIT dataChanged(index(0), index(rowCount() - 1), {IconUrlRole});
-    }
-}
-
 void ChannelModel::refreshNow(bool storeChanged)
 {
     if (m_channels.isEmpty()) {
@@ -206,7 +193,8 @@ QUrl ChannelModel::iconUrl(int row) const
     }
 
     const QString icon = m_channels.at(row).icon;
-    if (icon.isEmpty() || m_baseUrl.isEmpty()) {
+
+    if (icon.isEmpty()) {
         return {};
     }
 
@@ -215,5 +203,8 @@ QUrl ChannelModel::iconUrl(int row) const
         return {};
     }
 
-    return m_baseUrl.resolved(QUrl(icon));
+    // Sources report absolute addresses; there is nothing to resolve others against.
+    const QUrl url(icon);
+
+    return url.isRelative() ? QUrl() : url;
 }

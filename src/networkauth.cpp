@@ -12,24 +12,24 @@
 namespace
 {
 QMutex s_mutex;
-ServerConfig s_active;
+QList<NetworkAuth::HostCredentials> s_credentials;
 
 constexpr const char *s_attempts = "tvhAuthAttempts";
 constexpr const char *s_user = "tvhUser";
 constexpr const char *s_password = "tvhPassword";
 }
 
-void NetworkAuth::setActiveServer(const ServerConfig &config)
+void NetworkAuth::setCredentials(const QList<HostCredentials> &credentials)
 {
     QMutexLocker const lock(&s_mutex);
-    s_active = config;
+    s_credentials = credentials;
 }
 
-ServerConfig NetworkAuth::activeServer()
+QList<NetworkAuth::HostCredentials> NetworkAuth::credentials()
 {
     QMutexLocker const lock(&s_mutex);
 
-    return s_active;
+    return s_credentials;
 }
 
 void NetworkAuth::setReplyCredentials(QNetworkReply *reply,
@@ -59,15 +59,16 @@ void NetworkAuth::install(const QNetworkAccessManager *networkManager)
                              user = reply->property(s_user).toString();
                              password = reply->property(s_password).toString();
                          } else {
-                             const ServerConfig active = activeServer();
+                             // Never leak credentials to a host other than their source's.
+                             const QString host = reply->url().host();
 
-                             // Never leak credentials to a host other than the configured server.
-                             if (reply->url().host() != active.baseUrl().host()) {
-                                 return;
+                             for (const HostCredentials &entry : credentials()) {
+                                 if (entry.host == host) {
+                                     user = entry.username;
+                                     password = entry.password;
+                                     break;
+                                 }
                              }
-
-                             user = active.username;
-                             password = active.password;
                          }
 
                          if (user.isEmpty()) {

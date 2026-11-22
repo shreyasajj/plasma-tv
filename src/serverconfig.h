@@ -11,8 +11,8 @@
 #include <QUrl>
 
 // Connection parameters for a TVHeadend server or an M3U playlist with an
-// XMLTV guide (e.g. Dispatcharr). The password only ever lives in memory;
-// persistence goes through the system secret store (AppSettings).
+// XMLTV guide (e.g. Dispatcharr), as SourceConfig hands them to the TVHeadend
+// and M3U code.
 struct ServerConfig {
     enum class Backend : std::uint8_t {
         Tvheadend,

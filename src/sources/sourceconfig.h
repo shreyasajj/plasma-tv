@@ -13,9 +13,9 @@
 #include <QString>
 #include <QVariantMap>
 
-// Settings of one source of channels. 'fields' are stored in the config
-// file; 'secrets' (passwords, …) only
-// live in memory and go to the system secret store.
+// Settings of one source of channels, stored in the config file. 'secrets'
+// (passwords, …) are kept apart from the
+// 'fields', so they are never handed to QML.
 struct SourceConfig {
     // Values of 'type'.
     static constexpr QLatin1StringView Tvheadend{"tvheadend"};

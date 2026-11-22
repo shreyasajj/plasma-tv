@@ -15,10 +15,12 @@ BigscreenUI.Dialog {
     property Item returnFocus: null
     readonly property bool airing: event.start <= Tvh.now && event.stop > Tvh.now
     readonly property bool hasRecording: (event.dvrState ?? "").length > 0
+    // Only sources like TVHeadend record.
+    readonly property bool canRecord: Tvh.canRecordChannel(event.channel ?? "")
     signal watch(string uuid)
 
     width: 933
-    openFocusItem: airing ? watchButton : Tvh.canRecord ? recordButton : closeButton
+    openFocusItem: airing ? watchButton : canRecord ? recordButton : closeButton
 
     function show(ev) {
         event = ev;
@@ -179,7 +181,7 @@ BigscreenUI.Dialog {
             }
             TvButton {
                 id: recordButton
-                visible: Tvh.canRecord
+                visible: root.canRecord
                 text: !root.hasRecording ? qsTr("Record") : root.event.dvrState === "recording" ? qsTr("Stop recording") : qsTr("Cancel recording")
                 icon.name: root.hasRecording ? "media-playback-stop" : "media-record"
                 onActivated: {

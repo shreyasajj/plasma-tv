@@ -141,24 +141,19 @@ private Q_SLOTS:
                     QStringLiteral("B"),
                     QStringLiteral("/var/lib/logo.png")),
             channel(QStringLiteral("c"), 3, QStringLiteral("C")),
+            channel(QStringLiteral("d"),
+                    4,
+                    QStringLiteral("D"),
+                    QStringLiteral("http://logos/d.png")),
         });
 
-        // Without a server there is nothing to resolve against.
+        // Sources resolve their icons themselves: a relative address has nothing to resolve
+        // against, absolute ones work.
         QVERIFY(model.iconUrl(0).isEmpty());
-
-        QSignalSpy spy(&model, &ChannelModel::dataChanged);
-        model.setBaseUrl(QUrl(QStringLiteral("http://tvh:9981/")));
-
-        QCOMPARE(spy.count(), 1);
-        QCOMPARE(spy.first().at(2).value<QList<int>>(), QList<int>{ChannelModel::IconUrlRole});
-        QCOMPARE(model.iconUrl(0).toString(), QStringLiteral("http://tvh:9981/imagecache/12"));
+        QCOMPARE(model.iconUrl(3).toString(), QStringLiteral("http://logos/d.png"));
         // Paths on the server's disk can't be fetched.
         QVERIFY(model.iconUrl(1).isEmpty());
         QVERIFY(model.iconUrl(2).isEmpty());
-
-        // The same server again changes nothing.
-        model.setBaseUrl(QUrl(QStringLiteral("http://tvh:9981/")));
-        QCOMPARE(spy.count(), 1);
     }
 
     void tickOnlyUpdatesProgress()
